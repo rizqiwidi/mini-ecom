@@ -145,19 +145,23 @@ function tokenizeQuery(query: string) {
     .filter((token) => token.length > 1 && !STOP_WORDS.has(token));
 }
 
+function itemKey(item: ProductItem) {
+  return (item.sku ?? item.url ?? `${item.name ?? "unknown"}-${item.marketplace ?? ""}`).toLowerCase();
+}
+
 function filterByTokens(items: ProductItem[], tokens: string[], rawQuery: string) {
   if (!tokens.length) return items;
   const brandTokens = tokens.filter((token) => BRAND_KEYWORDS.has(token));
+  const nonBrandTokens = tokens.filter((token) => !brandTokens.includes(token));
   const normalizedQuery = rawQuery.toLowerCase();
   return items.filter((item) => {
     const haystack = `${item.name ?? ""} ${item.brand ?? ""} ${item.category ?? ""} ${item.marketplace ?? ""} ${item.sku ?? ""}`.toLowerCase();
-    if (!tokens.every((token) => haystack.includes(token))) return false;
     if (normalizedQuery && item.sku) {
       const skuLower = item.sku.toLowerCase();
       if (normalizedQuery.includes("-")) {
         const condensed = normalizedQuery.replace(/[^a-z0-9]/g, "");
         if (!skuLower.replace(/[^a-z0-9]/g, "").includes(condensed)) return false;
-      } else if (!skuLower.includes(normalizedQuery) && normalizedQuery.length > 4) {
+      } else if (!skuLower.includes(normalizedQuery) && normalizedQuery.length > 5) {
         return false;
       }
     }
@@ -166,6 +170,9 @@ function filterByTokens(items: ProductItem[], tokens: string[], rawQuery: string
       if (!brandTokens.some((token) => brand.includes(token))) return false;
       const conflictingBrands = [...BRAND_KEYWORDS].filter((token) => !brandTokens.includes(token));
       if (conflictingBrands.some((token) => haystack.includes(token))) return false;
+    }
+    if (nonBrandTokens.length && !nonBrandTokens.some((token) => haystack.includes(token))) {
+      return false;
     }
     return true;
   });
@@ -236,8 +243,29 @@ export async function GET(req: NextRequest) {
   const items = Array.isArray(data?.items) ? (data.items as ProductItem[]) : [];
 
   const fuse = new Fuse(items, FUSE_OPTIONS);
-  const fuseResults = fuse.search(q).map((res) => res.item);
-  const baseCandidates = fuseResults.length ? fuseResults : items;
+  const fuseResults = fuse.search(q, { limit: 600 });
+  const fuseScoreMap = new Map<string, number>();
+  for (const result of fuseResults) {
+    const key = itemKey(result.item);
+    if (!fuseScoreMap.has(key)) {
+      fuseScoreMap.set(key, result.score ?? 0);
+    }
+  }
+
+  const approximateMatches = tokens.length
+    ? items.filter((item) => tokens.some((token) => `${item.name ?? ""} ${item.brand ?? ""} ${item.category ?? ""} ${item.marketplace ?? ""} ${item.sku ?? ""}`.toLowerCase().includes(token)))
+    : items.slice(0, 400);
+
+  const candidateMap = new Map<string, ProductItem>();
+  for (const result of fuseResults) {
+    candidateMap.set(itemKey(result.item), result.item);
+  }
+  for (const item of approximateMatches) {
+    const key = itemKey(item);
+    if (!candidateMap.has(key)) candidateMap.set(key, item);
+  }
+
+  const baseCandidates = Array.from(candidateMap.values());
 
   const tokenFiltered = filterByTokens(baseCandidates, tokens, q);
   const trendFiltered = applyTrendFilter(tokenFiltered, trendFilter);
@@ -245,11 +273,24 @@ export async function GET(req: NextRequest) {
   const ranked = rankProducts(q, priceFiltered as any) as ProductItem[];
   const sorted = applySorting(ranked, sortMode);
 
-  const totalItems = sorted.length;
+  const reweighted = [...sorted].sort((a, b) => {
+    const keyA = itemKey(a);
+    const keyB = itemKey(b);
+    const fuseScoreA = fuseScoreMap.has(keyA) ? fuseScoreMap.get(keyA)! : 1;
+    const fuseScoreB = fuseScoreMap.has(keyB) ? fuseScoreMap.get(keyB)! : 1;
+    if (fuseScoreA !== fuseScoreB) return fuseScoreA - fuseScoreB;
+    const idxA = ranked.findIndex((x) => itemKey(x) === keyA);
+    const idxB = ranked.findIndex((x) => itemKey(x) === keyB);
+    return idxA - idxB;
+  });
+
+  const limited = reweighted.slice(0, MAX_RESULTS * 4);
+
+  const totalItems = limited.length;
   const totalPages = Math.max(1, Math.ceil(totalItems / MAX_RESULTS));
   const currentPage = Math.min(page, totalPages);
   const start = (currentPage - 1) * MAX_RESULTS;
-  const paged = sorted.slice(start, start + MAX_RESULTS);
+  const paged = limited.slice(start, start + MAX_RESULTS);
 
   return NextResponse.json({
     items: paged,
