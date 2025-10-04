@@ -62,13 +62,22 @@ export async function POST(req: NextRequest) {
       else if (delta < -0.5) direction = "down";
       else direction = "flat";
     }
+
+    const rawForecast = forecastNext7(priceSeries);
+    const forecast7 = rawForecast.map((value) => {
+      const nextValue = Math.max(0, value);
+      if (direction === "down") return Math.min(latestPrice, nextValue);
+      if (direction === "up") return Math.max(latestPrice, nextValue);
+      return nextValue;
+    });
+
     return {
       ...meta,
       price: latestPrice,
       trend: trendFlag(priceSeries),
       direction,
       changePercent,
-      forecast7: forecastNext7(priceSeries),
+      forecast7,
     };
   });
 

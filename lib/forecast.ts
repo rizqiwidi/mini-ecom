@@ -20,17 +20,7 @@ export function linearTrend(values: number[]) {
 export function forecastNext7(values: number[]) {
   const level = ewma(values);
   const slope = linearTrend(values);
-  const raw = Array.from({ length: 7 }, (_, k) => level + (k + 1) * slope);
-  return raw.map((value, index) => {
-    const lastActual = values[values.length - 1];
-    if (slope < 0) {
-      return Math.min(lastActual, Math.max(0, value));
-    }
-    if (slope > 0) {
-      return Math.max(lastActual, value);
-    }
-    return Math.max(0, value);
-  });
+  return Array.from({ length: 7 }, (_, k) => Math.max(0, level + (k + 1) * slope));
 }
 
 export function trendFlag(values: number[]) {

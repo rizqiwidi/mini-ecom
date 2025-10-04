@@ -156,7 +156,7 @@ export default function ProductCard({ p }: ProductCardProps) {
         </div>
         {next !== null && (
           <div className="rounded-2xl border border-white/10 bg-white/10 px-3 py-2 text-xs text-white/80">
-            Prediksi harga besok: <span className="font-semibold text-white">{currency.format(Math.round(next))}</span>
+            Prediksi harga dalam 7 hari: <span className="font-semibold text-white">{currency.format(Math.round(next))}</span>
           </div>
         )}
         {p.url && (
