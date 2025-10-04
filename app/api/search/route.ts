@@ -58,6 +58,25 @@ const FUSE_OPTIONS: IFuseOptions<ProductItem> = {
   ],
 };
 
+const TOKEN_SYNONYMS: Record<string, string[]> = {
+  intel: ["intel", "core", "i3", "i5", "i7", "i9", "corei3", "corei5", "corei7", "corei9"],
+  core: ["intel", "core", "i3", "i5", "i7", "i9"],
+  i3: ["i3", "intel", "core"],
+  i5: ["i5", "intel", "core"],
+  i7: ["i7", "intel", "core"],
+  i9: ["i9", "intel", "core"],
+  amd: ["amd", "ryzen", "r3", "r5", "r7", "r9"],
+  ryzen: ["ryzen", "amd", "r3", "r5", "r7", "r9"],
+  r3: ["r3", "ryzen", "amd"],
+  r5: ["r5", "ryzen", "amd"],
+  r7: ["r7", "ryzen", "amd"],
+  r9: ["r9", "ryzen", "amd"],
+  nvidia: ["nvidia", "geforce", "gtx", "rtx"],
+  geforce: ["geforce", "nvidia", "gtx", "rtx"],
+  gtx: ["gtx", "geforce", "nvidia", "rtx"],
+  rtx: ["rtx", "geforce", "nvidia", "gtx"],
+};
+
 let cachedData: ProductsPayload = null;
 let cachedLocalMtime: number | null = null;
 
@@ -147,6 +166,42 @@ function tokenizeQuery(query: string) {
 
 function itemKey(item: ProductItem) {
   return (item.sku ?? item.url ?? `${item.name ?? "unknown"}-${item.marketplace ?? ""}`).toLowerCase();
+}
+
+function normalizeWords(input: string) {
+  return input.split(/[^a-z0-9]+/).filter(Boolean);
+}
+
+function getSynonyms(token: string) {
+  return TOKEN_SYNONYMS[token] ?? [];
+}
+
+function levenshtein(a: string, b: string) {
+  if (a === b) return 0;
+  if (!a.length) return b.length;
+  if (!b.length) return a.length;
+  const matrix = Array.from({ length: a.length + 1 }, () => Array(b.length + 1).fill(0));
+  for (let i = 0; i <= a.length; i += 1) matrix[i][0] = i;
+  for (let j = 0; j <= b.length; j += 1) matrix[0][j] = j;
+  for (let i = 1; i <= a.length; i += 1) {
+    for (let j = 1; j <= b.length; j += 1) {
+      const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+      matrix[i][j] = Math.min(matrix[i - 1][j] + 1, matrix[i][j - 1] + 1, matrix[i - 1][j - 1] + cost);
+    }
+  }
+  return matrix[a.length][b.length];
+}
+
+function matchesToken(token: string, haystack: string, words: string[]) {
+  if (!token) return true;
+  if (haystack.includes(token)) return true;
+  for (const synonym of getSynonyms(token)) {
+    if (haystack.includes(synonym)) return true;
+  }
+  for (const word of words) {
+    if (levenshtein(token, word) <= 1) return true;
+  }
+  return false;
 }
 
 function filterByTokens(items: ProductItem[], tokens: string[], rawQuery: string) {
@@ -300,6 +355,7 @@ export async function GET(req: NextRequest) {
     pageSize: MAX_RESULTS,
   });
 }
+
 
 
 
