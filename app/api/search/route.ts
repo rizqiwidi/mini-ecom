@@ -9,26 +9,21 @@ type ProductItem = Record<string, any>;
 
 const LOCAL_JSON_PATH = join(process.cwd(), "public", "processed", "products.json");
 const MAX_RESULTS = 24;
+const MAX_QUERY_TOKENS = 5;
 
-const BRAND_KEYWORDS = new Set([
-  "asus",
-  "acer",
-  "lenovo",
-  "hp",
-  "dell",
-  "msi",
-  "apple",
-  "samsung",
-  "huawei",
-  "lg",
-  "xiaomi",
-  "razer",
-  "axioo",
-  "zyrex",
-  "infinix",
-  "gigabyte",
-  "surface",
+const STOP_WORDS = new Set([
+  "dan",
+  "yang",
+  "atau",
+  "untuk",
+  "dengan",
+  "the",
+  "and",
+  "with",
+  "di",
+  "ke",
 ]);
+
 
 let cachedData: ProductsPayload = null;
 let cachedLocalMtime: number | null = null;
@@ -109,32 +104,33 @@ function parsePayload(raw: string): ProductsPayload {
   return null;
 }
 
+function tokenizeQuery(raw: string) {
+  const normalized = raw.toLowerCase();
+  const primary = normalized
+    .split(/\s+/)
+    .map((token) => token.replace(/[^a-z0-9]/g, ""))
+    .filter((token) => token && token.length > 1 && !STOP_WORDS.has(token));
+  const unique = primary.filter((token, index) => primary.indexOf(token) === index).slice(0, MAX_QUERY_TOKENS);
+  if (unique.length) return unique;
+  return normalized
+    .split(/\s+/)
+    .map((token) => token.replace(/[^a-z0-9]/g, ""))
+    .filter(Boolean)
+    .slice(0, MAX_QUERY_TOKENS);
+}
 function filterByTokens(items: ProductItem[], tokens: string[], rawQuery: string) {
   if (!tokens.length) return items;
-  const brandTokens = tokens.filter((token) => BRAND_KEYWORDS.has(token));
   const normalizedQuery = rawQuery.toLowerCase();
   return items.filter((item) => {
     const haystack = `${item.name ?? ""} ${item.brand ?? ""} ${item.category ?? ""} ${item.marketplace ?? ""} ${item.sku ?? ""}`.toLowerCase();
-    if (!tokens.every((token) => haystack.includes(token))) return false;
-    if (normalizedQuery && item.sku) {
-      const skuLower = item.sku.toLowerCase();
-      if (normalizedQuery.includes("-")) {
-        const condensed = normalizedQuery.replace(/[^a-z0-9]/g, "");
-        if (!skuLower.replace(/[^a-z0-9]/g, "").includes(condensed)) return false;
-      } else if (!skuLower.includes(normalizedQuery) && normalizedQuery.length > 4) {
-        return false;
-      }
+    if (normalizedQuery && item.sku && normalizedQuery.includes("-")) {
+      const condensed = normalizedQuery.replace(/[^a-z0-9]/g, "");
+      const skuLower = item.sku.toLowerCase().replace(/[^a-z0-9]/g, "");
+      if (!skuLower.includes(condensed)) return false;
     }
-    if (brandTokens.length) {
-      const brand = String(item.brand ?? "").toLowerCase();
-      if (!brandTokens.some((token) => brand.includes(token))) return false;
-      const conflictingBrands = [...BRAND_KEYWORDS].filter((token) => !brandTokens.includes(token));
-      if (conflictingBrands.some((token) => haystack.includes(token))) return false;
-    }
-    return true;
+    return tokens.some((token) => haystack.includes(token));
   });
 }
-
 function applyTrendFilter(items: ProductItem[], trend: string) {
   if (!items.length || trend === "all") return items;
   const normalized = trend.toLowerCase();
@@ -189,7 +185,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ items: [], page: 1, totalPages: 1, totalItems: 0, pageSize: MAX_RESULTS });
   }
 
-  const tokens = q.toLowerCase().split(/\s+/).filter(Boolean);
+  const tokens = tokenizeQuery(q);
   const trendFilter = (req.nextUrl.searchParams.get("trend") || "all").toLowerCase();
   const priceFilter = (req.nextUrl.searchParams.get("price") || "all").toLowerCase();
   const sortMode = (req.nextUrl.searchParams.get("sort") || "relevance").toLowerCase();
@@ -219,5 +215,8 @@ export async function GET(req: NextRequest) {
     pageSize: MAX_RESULTS,
   });
 }
+
+
+
 
 

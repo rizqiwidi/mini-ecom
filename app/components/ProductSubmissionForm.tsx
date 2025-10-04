@@ -2,6 +2,8 @@
 
 import { FormEvent, useMemo, useState } from "react";
 
+import { useToast } from "./ToastProvider";
+
 const brandOptions = [
   "Asus",
   "Acer",
@@ -38,6 +40,7 @@ export default function ProductSubmissionForm() {
   const [soldDigits, setSoldDigits] = useState("");
   const [status, setStatus] = useState<Status>("idle");
   const [message, setMessage] = useState<string | null>(null);
+  const { push } = useToast();
 
   const effectiveBrand = useMemo(() => {
     if (brand === "Lainnya") {
@@ -49,34 +52,36 @@ export default function ProductSubmissionForm() {
   const formattedPrice = formatRupiah(priceDigits);
   const formattedSold = soldDigits ? formatNumber(soldDigits) : "";
 
+  const showError = (description: string) => {
+    setStatus("error");
+    setMessage(description);
+    push({ title: "Gagal menambah produk", description, variant: "error" });
+  };
+
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setStatus("loading");
     setMessage(null);
 
     if (!name.trim()) {
-      setStatus("error");
-      setMessage("Nama produk wajib diisi.");
+      showError("Nama produk wajib diisi.");
       return;
     }
 
     if (!effectiveBrand) {
-      setStatus("error");
-      setMessage("Brand wajib diisi.");
+      showError("Brand wajib diisi.");
       return;
     }
 
     const price = Number(priceDigits || 0);
     if (!Number.isFinite(price) || price <= 0) {
-      setStatus("error");
-      setMessage("Harga wajib diisi dengan angka yang valid.");
+      showError("Harga wajib diisi dengan angka yang valid.");
       return;
     }
 
     const sold = soldDigits ? Number(soldDigits) : undefined;
     if (soldDigits && (!Number.isFinite(sold!) || sold! < 0)) {
-      setStatus("error");
-      setMessage("Jumlah terjual harus angka >= 0.");
+      showError("Jumlah terjual harus angka >= 0.");
       return;
     }
 
@@ -101,11 +106,15 @@ export default function ProductSubmissionForm() {
       }
 
       setStatus("success");
-      setMessage(data?.message || "Data produk baru berhasil ditambahkan ke database manual.");
+      const successMessage = data?.message || "Data produk baru berhasil ditambahkan ke database manual.";
+      setMessage(successMessage);
+      push({ title: "Produk ditambahkan", description: successMessage, variant: "success" });
       resetForm();
     } catch (error: any) {
       setStatus("error");
-      setMessage(error?.message || "Terjadi kesalahan.");
+      const errorMessage = error?.message || "Terjadi kesalahan.";
+      setMessage(errorMessage);
+      push({ title: "Gagal menambah produk", description: errorMessage, variant: "error" });
     }
   };
 
@@ -268,4 +277,11 @@ function formatNumber(digits: string) {
   if (!Number.isFinite(number)) return digits;
   return new Intl.NumberFormat("id-ID", { maximumFractionDigits: 0 }).format(number);
 }
+
+
+
+
+
+
+
 

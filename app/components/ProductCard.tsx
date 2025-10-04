@@ -2,6 +2,8 @@
 
 import { FormEvent, useMemo, useState } from "react";
 
+import { useToast } from "./ToastProvider";
+
 type ProductCardProps = {
   p: {
     sku: string;
@@ -58,8 +60,15 @@ export default function ProductCard({ p }: ProductCardProps) {
   const [note, setNote] = useState("");
   const [status, setStatus] = useState<"idle" | "loading" | "success" | "error">("idle");
   const [message, setMessage] = useState<string | null>(null);
+  const { push } = useToast();
 
   const formattedInputPrice = formatRupiah(newPriceDigits);
+
+  const showFeedbackError = (description: string) => {
+    setStatus("error");
+    setMessage(description);
+    push({ title: "Gagal mengirim update harga", description, variant: "error" });
+  };
 
   const handleFeedback = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -68,8 +77,7 @@ export default function ProductCard({ p }: ProductCardProps) {
 
     const priceValue = Number(newPriceDigits || 0);
     if (!Number.isFinite(priceValue) || priceValue <= 0) {
-      setStatus("error");
-      setMessage("Harga baru harus berupa angka positif.");
+      showFeedbackError("Harga baru harus berupa angka positif.");
       return;
     }
 
@@ -95,14 +103,16 @@ export default function ProductCard({ p }: ProductCardProps) {
 
       const data = await res.json().catch(() => ({}));
       setStatus("success");
-      setMessage(data?.message || "Terima kasih! Pembaruan harga tercatat.");
+      const successMessage = data?.message || "Terima kasih! Pembaruan harga tercatat.";
+      setMessage(successMessage);
+      push({ title: "Harga diperbarui", description: successMessage, variant: "success" });
       setDisplayPrice(priceValue);
       setNewPriceDigits("");
       setNote("");
       setShowForm(false);
     } catch (error: any) {
-      setStatus("error");
-      setMessage(error?.message || "Terjadi kesalahan.");
+      const errorMessage = error?.message || "Terjadi kesalahan.";
+      showFeedbackError(errorMessage);
     }
   };
 
@@ -213,4 +223,11 @@ function formatRupiah(digits: string) {
   if (!Number.isFinite(number)) return digits;
   return new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", maximumFractionDigits: 0 }).format(number);
 }
+
+
+
+
+
+
+
 

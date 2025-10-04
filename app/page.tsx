@@ -2,9 +2,18 @@
 
 import SearchBar from "./components/SearchBar";
 import SearchFilters from "./components/SearchFilters";
+import SearchNotifier from "./components/SearchNotifier";
 import ProductCard from "./components/ProductCard";
 import ProductSubmissionForm from "./components/ProductSubmissionForm";
 import PaginationControls from "./components/PaginationControls";
+
+const MAX_QUERY_WORDS = 5;
+
+function clipQuery(raw: string) {
+  const words = raw.trim().split(/\s+/).filter(Boolean);
+  if (!words.length) return "";
+  return words.slice(0, MAX_QUERY_WORDS).join(" ");
+}
 
 function resolveBaseUrl() {
   const configured = process.env.NEXT_PUBLIC_BASE_URL?.trim();
@@ -42,11 +51,11 @@ type SearchResponse = {
 };
 
 async function searchServer({ q, trend, price, sort, page }: SearchOptions): Promise<SearchResponse> {
-  const trimmed = q.trim();
-  if (!trimmed) {
+  const normalized = clipQuery(q);
+  if (!normalized) {
     return { items: [], page: 1, totalPages: 1, totalItems: 0, pageSize: 24 };
   }
-  const params = new URLSearchParams({ q: trimmed });
+  const params = new URLSearchParams({ q: normalized });
   if (trend && trend !== "all") params.set("trend", trend);
   if (price && price !== "all") params.set("price", price);
   if (sort && sort !== "relevance") params.set("sort", sort);
@@ -77,20 +86,21 @@ export default async function Page({
 }: {
   searchParams: { q?: string; trend?: string; price?: string; sort?: string; page?: string };
 }) {
-  const q = searchParams.q ?? "";
+  const rawQuery = searchParams.q ?? "";
+  const searchQuery = clipQuery(rawQuery);
   const trend = searchParams.trend ?? "all";
   const price = searchParams.price ?? "all";
   const sort = searchParams.sort ?? "relevance";
   const page = Number.parseInt(searchParams.page ?? "1", 10) || 1;
 
-  const { items, totalItems, totalPages, page: currentPage } = await searchServer({ q, trend, price, sort, page });
+  const { items, totalItems, totalPages, page: currentPage } = await searchServer({ q: searchQuery, trend, price, sort, page });
   const filtersApplied = [
     trend !== "all" ? `Tren: ${trend}` : null,
     price !== "all" ? "Filter harga aktif" : null,
     sort !== "relevance" ? `Urut: ${sort}` : null,
   ]
     .filter(Boolean)
-    .join(" · ");
+    .join(" | ");
   const heroStats = [
     { label: "Total hasil", value: totalItems.toLocaleString("id-ID") },
     { label: "Halaman", value: `${currentPage}/${Math.max(totalPages, 1)}` },
@@ -99,6 +109,7 @@ export default async function Page({
 
   return (
     <div className="flex flex-col gap-10">
+      <SearchNotifier query={searchQuery} totalItems={totalItems} />
       <section className="relative overflow-hidden rounded-3xl border border-white/10 bg-gradient-to-br from-indigo-500/40 via-transparent to-transparent p-10 text-white shadow-2xl">
         <div className="absolute inset-0 -z-10 bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.25),transparent_55%)]" />
         <div className="flex flex-col gap-6">
@@ -133,10 +144,10 @@ export default async function Page({
         </div>
       </section>
 
-      {q && (
+      {searchQuery && (
         <div className="flex flex-col gap-2 rounded-2xl border border-white/10 bg-white/5 p-4 text-sm text-white/80 backdrop-blur">
           <div className="font-semibold text-white">
-            Menampilkan hasil untuk: <span className="text-indigo-300">{q}</span>
+            Menampilkan hasil untuk: <span className="text-indigo-300">{searchQuery}</span>
           </div>
           <div>{filtersApplied || "Tidak ada filter tambahan yang aktif."}</div>
         </div>
@@ -148,19 +159,19 @@ export default async function Page({
         ))}
       </div>
 
-      {q && !items.length && (
+      {searchQuery && !items.length && (
         <div className="rounded-3xl border border-dashed border-white/10 bg-white/5 p-8 text-center text-sm text-white/70">
           Tidak ditemukan hasil dengan filter saat ini. Coba ubah kata kunci atau reset filter harga/tren.
         </div>
       )}
 
-      {!q && (
+      {!searchQuery && (
         <div className="rounded-3xl border border-white/10 bg-white/5 p-6 text-sm text-white/70">
           Mulai dengan mengetik nama produk, merek, atau spesifikasi. Contoh: <span className="font-semibold text-white">"asus tuf rtx"</span> atau <span className="font-semibold text-white">"macbook m2"</span>.
         </div>
       )}
 
-      {q && totalPages > 1 && (
+      {searchQuery && totalPages > 1 && (
         <PaginationControls page={currentPage} totalPages={totalPages} totalItems={totalItems} />
       )}
 
@@ -170,4 +181,13 @@ export default async function Page({
     </div>
   );
 }
+
+
+
+
+
+
+
+
+
 

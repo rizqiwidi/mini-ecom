@@ -1,41 +1,83 @@
-"use client";
+﻿"use client";
 import { useRouter, useSearchParams } from "next/navigation";
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useEffect, useRef, useState } from "react";
 
-const sanitizeSingleWord = (value: string) => {
-  const trimmed = value.trim();
-  if (!trimmed) return "";
-  const [first] = trimmed.split(/\s+/);
-  return first ?? "";
-};
+import { useToast } from "./ToastProvider";
+
+type WordLimitResult = { value: string; truncated: boolean };
+
+const MAX_WORDS = 5;
+
+function sanitizeSearchInput(value: string): WordLimitResult {
+  const words = value.trim().split(/\s+/).filter(Boolean);
+  if (!words.length) {
+    return { value: "", truncated: false };
+  }
+  const limited = words.slice(0, MAX_WORDS);
+  return { value: limited.join(" "), truncated: words.length > limited.length };
+}
 
 export default function SearchBar() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const [term, setTerm] = useState(() => sanitizeSingleWord(searchParams.get("q") ?? ""));
+  const { push } = useToast();
+  const truncatedNoticeShown = useRef(false);
+  const initialSanitized = sanitizeSearchInput(searchParams.get("q") ?? "").value;
+  const [term, setTerm] = useState(initialSanitized);
 
-  useEffect(() => setTerm(sanitizeSingleWord(searchParams.get("q") ?? "")), [searchParams]);
+  useEffect(() => {
+    const result = sanitizeSearchInput(searchParams.get("q") ?? "");
+    setTerm(result.value);
+  }, [searchParams]);
 
   const handleSubmit = (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const params = new URLSearchParams(Array.from(searchParams.entries()));
-    const value = sanitizeSingleWord(term);
-    if (value) params.set("q", value);
+    const result = sanitizeSearchInput(term);
+    if (result.value) params.set("q", result.value);
     else params.delete("q");
     params.delete("page");
     const query = params.toString();
     router.push(query ? `/?${query}` : "/");
+    if (result.value) {
+      push({ title: "Mencari produk", description: `Kata kunci: \"${result.value}\"`, variant: "info", durationMs: 2500 });
+    }
+  };
+
+  const handleInputChange = (raw: string) => {
+    const result = sanitizeSearchInput(raw);
+    setTerm(result.value);
+    const trimmed = raw.trim();
+    if (result.truncated && !truncatedNoticeShown.current && trimmed) {
+      truncatedNoticeShown.current = true;
+      push({
+        title: "Maksimal 5 kata",
+        description: "Kami hanya mengambil lima kata pertama untuk menjaga pencarian tetap cepat.",
+        variant: "warning",
+      });
+    }
+    if (!result.truncated) {
+      truncatedNoticeShown.current = false;
+    }
   };
 
   return (
     <form className="group flex w-full flex-col gap-3 sm:flex-row" onSubmit={handleSubmit}>
       <div className="relative flex-1">
-        <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-lg text-white/60">??</span>
+        <span
+          className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-white/60"
+          aria-hidden="true"
+        >
+          <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none">
+            <circle cx="11" cy="11" r="6" stroke="currentColor" strokeWidth="1.5" />
+            <path d="M20 20l-3.4-3.4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+          </svg>
+        </span>
         <input
           className="w-full rounded-2xl border border-white/20 bg-white/10 px-12 py-3 text-base text-white placeholder:text-white/50 shadow-inner transition hover:border-indigo-300 focus:border-indigo-400 focus:bg-white/20 focus:outline-none focus:ring-2 focus:ring-indigo-400/40"
-          placeholder="Cari produk (hanya satu kata)"
+          placeholder="Cari produk (maks. 5 kata)"
           value={term}
-          onChange={(e) => setTerm(sanitizeSingleWord(e.target.value))}
+          onChange={(e) => handleInputChange(e.target.value)}
         />
       </div>
       <button
@@ -48,3 +90,6 @@ export default function SearchBar() {
     </form>
   );
 }
+
+
+
