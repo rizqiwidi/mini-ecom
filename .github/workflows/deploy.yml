@@ -39,7 +39,7 @@ jobs:
       - name: (Optional) Trigger ETL on Production
         if: ${{ secrets.BLOB_READ_WRITE_TOKEN != '' }}
         run: |
-          curl -X POST "https://$VERCEL_PROJECT_DOMAIN/api/etl"             -H "x-cron-token: $BLOB_READ_WRITE_TOKEN"
+          curl -X POST "https://$VERCEL_PROJECT_DOMAIN/api/etl" -H "x-cron-token: $BLOB_READ_WRITE_TOKEN"
         env:
           BLOB_READ_WRITE_TOKEN: ${{ secrets.BLOB_READ_WRITE_TOKEN }}
           VERCEL_PROJECT_DOMAIN: ${{ secrets.VERCEL_PROJECT_DOMAIN }}
