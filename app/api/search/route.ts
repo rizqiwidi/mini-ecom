@@ -159,11 +159,10 @@ function withComputedDirection(item: ProductItem) {
   const price = Number(item.price ?? NaN);
   const forecast = Array.isArray(item.forecast7) && item.forecast7.length ? Number(item.forecast7[0]) : NaN;
   let direction: "up" | "down" | "flat" = "flat";
-  if (typeof item.direction === "string" && ["up", "down", "flat"].includes(item.direction)) {
-    direction = item.direction as "up" | "down" | "flat";
-  } else if (typeof item.trend === "string" && ["up", "down", "flat"].includes(item.trend)) {
-    direction = item.trend as "up" | "down" | "flat";
-  }
+  const fallback = typeof item.trend === "string" && ["up", "down", "flat"].includes(item.trend)
+    ? (item.trend as "up" | "down" | "flat")
+    : "flat";
+  direction = fallback;
   const tolerance = 1; // IDR
   if (Number.isFinite(price) && Number.isFinite(forecast)) {
     if (price > forecast + tolerance) direction = "down";
@@ -173,4 +172,106 @@ function withComputedDirection(item: ProductItem) {
   return { ...item, direction };
 }
 
+function filterByTokens(items: ProductItem[], tokens: string[], rawQuery: string) {
+  if (!tokens.length) return items;
+  const normalizedQuery = rawQuery.toLowerCase();
+  return items.filter((item) => {
+    const haystack = `${item.name ?? ""} ${item.brand ?? ""} ${item.category ?? ""} ${item.marketplace ?? ""} ${item.sku ?? ""}`.toLowerCase();
+    if (normalizedQuery && item.sku && normalizedQuery.includes("-")) {
+      const condensed = normalizedQuery.replace(/[^a-z0-9]/g, "");
+      const skuLower = item.sku.toLowerCase().replace(/[^a-z0-9]/g, "");
+      if (!skuLower.includes(condensed)) return false;
+    }
+    return tokens.some((token) => haystack.includes(token));
+  });
+}
 
+function applyTrendFilter(items: ProductItem[], trend: string) {
+  if (!items.length || trend === "all") return items;
+  const normalized = trend.toLowerCase();
+  return items.filter((item) => {
+    const current = (item.direction ?? item.trend ?? "").toLowerCase();
+    return current === normalized;
+  });
+}
+
+function applyPriceFilter(items: ProductItem[], filter: string) {
+  if (!items.length || filter === "all") return items;
+  return items.filter((item) => {
+    const price = Number(item.price ?? NaN);
+    if (!Number.isFinite(price)) return false;
+    switch (filter) {
+      case "lt-5000k":
+        return price < 5_000_000;
+      case "5000-10000k":
+        return price >= 5_000_000 && price <= 10_000_000;
+      case "gt-10000k":
+        return price > 10_000_000;
+      default:
+        return true;
+    }
+  });
+}
+
+function applySorting(items: ProductItem[], mode: string) {
+  if (!items.length) return items;
+  switch (mode) {
+    case "price-asc":
+      return [...items].sort((a, b) => getPrice(a, Infinity) - getPrice(b, Infinity));
+    case "price-desc":
+      return [...items].sort((a, b) => getPrice(b, -Infinity) - getPrice(a, -Infinity));
+    case "sold-desc":
+      return [...items].sort((a, b) => getSold(b) - getSold(a));
+    default:
+      return items;
+  }
+}
+
+function getPrice(item: ProductItem, fallback: number) {
+  const value = Number(item.price);
+  return Number.isFinite(value) ? value : fallback;
+}
+
+function getSold(item: ProductItem) {
+  const value = Number(item.sold);
+  return Number.isFinite(value) ? value : -1;
+}
+
+export async function GET(req: NextRequest) {
+  const q = (req.nextUrl.searchParams.get("q") || "").trim();
+  if (!q) {
+    return NextResponse.json({ items: [], page: 1, totalPages: 1, totalItems: 0, pageSize: MAX_RESULTS });
+  }
+
+  const tokens = tokenizeQuery(q);
+  const trendFilter = (req.nextUrl.searchParams.get("trend") || "all").toLowerCase();
+  const priceFilter = (req.nextUrl.searchParams.get("price") || "all").toLowerCase();
+  const sortMode = (req.nextUrl.searchParams.get("sort") || "relevance").toLowerCase();
+  const pageParam = Number.parseInt(req.nextUrl.searchParams.get("page") || "1", 10);
+  const page = Number.isFinite(pageParam) && pageParam > 0 ? pageParam : 1;
+
+  const data = await loadProducts();
+  const items = Array.isArray(data?.items) ? (data.items as ProductItem[]) : [];
+  const manualSubmissions = await loadManualSubmissions();
+  const combinedItems = [...items, ...manualSubmissions].map(withComputedDirection);
+
+  const tokenFiltered = filterByTokens(combinedItems, tokens, q);
+  const trendFiltered = applyTrendFilter(tokenFiltered, trendFilter);
+  const priceFiltered = applyPriceFilter(trendFiltered, priceFilter);
+  const ranked = rankProducts(q, priceFiltered as any) as ProductItem[];
+  const sorted = applySorting(ranked, sortMode);
+
+  const totalItems = sorted.length;
+  const totalPages = Math.max(1, Math.ceil(totalItems / MAX_RESULTS));
+  const currentPage = Math.min(page, totalPages);
+  const start = (currentPage - 1) * MAX_RESULTS;
+  const paged = sorted.slice(start, start + MAX_RESULTS);
+
+  return NextResponse.json({
+    items: paged,
+    page: currentPage,
+    totalPages,
+    totalItems,
+    pageSize: MAX_RESULTS,
+  });
+}
