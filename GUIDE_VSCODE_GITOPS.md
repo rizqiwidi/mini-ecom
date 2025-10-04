@@ -1,4 +1,4 @@
-﻿# Panduan Lengkap (VS Code + GitHub SSH + Vercel Blob + GitOps)
+# Panduan Lengkap (VS Code + GitHub SSH + Vercel Blob + GitOps)
 
 ## 0) Install alat
 - Node.js LTS (v18/v20), Git, VS Code.
@@ -16,12 +16,13 @@ Buka http://localhost:3000
 
 ## 3) Upload CSV laptop ke Blob atau commit ke repo
 Cara termudah untuk mulai:
-- Copy CSV Kaggle ke `data/laptops.csv`
-- Jalankan:
+- Copy CSV Kaggle ke `data/` (opsional) atau langsung upload ke Blob key `<BLOB_PREFIX>/raw/...`
+- Untuk memprosesnya, jalankan aplikasi (`npm run dev`) lalu panggil endpoint ETL:
 ```bash
-npx ts-node scripts/etl/processFromLocal.ts
+curl -X POST http://localhost:3000/api/etl \
+  -H 'x-cron-token: YOUR_BLOB_READ_WRITE_TOKEN'
 ```
-Ini membuat `public/processed/products.json` dan menguploadnya ke **Vercel Blob**.
+Endpoint ini menghasilkan `public/processed/products.json` dan otomatis mengunggahnya ke **Vercel Blob** jika token valid.
 
 ## 4) Cek lokal
 `npm run dev` -> cari "asus i5". Data akan diambil dari Blob (jika ada) atau fallback ke `public/processed/products.json`.
@@ -37,4 +38,4 @@ Ini membuat `public/processed/products.json` dan menguploadnya ke **Vercel Blob*
 - (Opsional) Post-deploy, panggil `/api/etl` untuk regenerasi `products.json` dari CSV di Blob.
 
 ## 6) Update dataset
-- Upload CSV baru ke Blob (key: `<BLOB_PREFIX>/raw/laptops.csv`) atau commit CSV baru di `data/`, lalu jalankan ETL lokal lagi.
+- Upload CSV baru ke Blob (key: `<BLOB_PREFIX>/raw/laptops/...`) atau commit CSV di `data/`, kemudian panggil `/api/etl` (lokal atau di Vercel) untuk regenerasi dataset.

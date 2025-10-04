@@ -5,8 +5,7 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "start": "next start",
-    "etl:local": "ts-node scripts/etl/processFromLocal.ts"
+    "start": "next start"
   },
   "dependencies": {
     "@vercel/blob": "^2.0.0",
