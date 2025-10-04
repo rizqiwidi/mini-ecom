@@ -3,6 +3,7 @@
 > Mini E-com Laptop Indonesia is a curated pricing intelligence project that aggregates historical laptop listings from Indonesia’s major marketplaces, normalizes the data through an ETL pipeline, and serves an interactive search experience complete with trend tracking, 7‑day forecasts, and community-driven price updates for smarter purchasing decisions.
 
 **Live demo:** https://mini-ecom-blush.vercel.app/
+
 **Dataset:** https://www.kaggle.com/datasets/artakusuma/laptopecomercee/
 
 ##  Highlights
