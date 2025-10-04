@@ -1,4 +1,6 @@
-﻿import { NextRequest, NextResponse } from "next/server";
+﻿import Fuse from "fuse.js";
+import type { IFuseOptions } from "fuse.js";
+import { NextRequest, NextResponse } from "next/server";
 import { join } from "node:path";
 import { readFile, stat } from "node:fs/promises";
 
@@ -29,6 +31,32 @@ const BRAND_KEYWORDS = new Set([
   "gigabyte",
   "surface",
 ]);
+
+const STOP_WORDS = new Set([
+  "with",
+  "dan",
+  "dengan",
+  "yang",
+  "and",
+  "the",
+  "atau",
+  "ke",
+  "di",
+]);
+
+const FUSE_OPTIONS: IFuseOptions<ProductItem> = {
+  includeScore: true,
+  threshold: 0.38,
+  ignoreLocation: true,
+  minMatchCharLength: 2,
+  keys: [
+    { name: "name", weight: 0.5 },
+    { name: "brand", weight: 0.3 },
+    { name: "category", weight: 0.15 },
+    { name: "marketplace", weight: 0.05 },
+    { name: "sku", weight: 0.35 },
+  ],
+};
 
 let cachedData: ProductsPayload = null;
 let cachedLocalMtime: number | null = null;
@@ -107,6 +135,14 @@ function parsePayload(raw: string): ProductsPayload {
     }
   } catch {}
   return null;
+}
+
+function tokenizeQuery(query: string) {
+  return query
+    .toLowerCase()
+    .split(/\s+/)
+    .map((token) => token.replace(/[^a-z0-9]/g, ""))
+    .filter((token) => token.length > 1 && !STOP_WORDS.has(token));
 }
 
 function filterByTokens(items: ProductItem[], tokens: string[], rawQuery: string) {
@@ -189,7 +225,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ items: [], page: 1, totalPages: 1, totalItems: 0, pageSize: MAX_RESULTS });
   }
 
-  const tokens = q.toLowerCase().split(/\s+/).filter(Boolean);
+  const tokens = tokenizeQuery(q);
   const trendFilter = (req.nextUrl.searchParams.get("trend") || "all").toLowerCase();
   const priceFilter = (req.nextUrl.searchParams.get("price") || "all").toLowerCase();
   const sortMode = (req.nextUrl.searchParams.get("sort") || "relevance").toLowerCase();
@@ -199,7 +235,11 @@ export async function GET(req: NextRequest) {
   const data = await loadProducts();
   const items = Array.isArray(data?.items) ? (data.items as ProductItem[]) : [];
 
-  const tokenFiltered = filterByTokens(items, tokens, q);
+  const fuse = new Fuse(items, FUSE_OPTIONS);
+  const fuseResults = fuse.search(q).map((res) => res.item);
+  const baseCandidates = fuseResults.length ? fuseResults : items;
+
+  const tokenFiltered = filterByTokens(baseCandidates, tokens, q);
   const trendFiltered = applyTrendFilter(tokenFiltered, trendFilter);
   const priceFiltered = applyPriceFilter(trendFiltered, priceFilter);
   const ranked = rankProducts(q, priceFiltered as any) as ProductItem[];
@@ -219,5 +259,8 @@ export async function GET(req: NextRequest) {
     pageSize: MAX_RESULTS,
   });
 }
+
+
+
 
 
