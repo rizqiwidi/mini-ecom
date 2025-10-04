@@ -53,28 +53,26 @@ export async function POST(req: NextRequest) {
   const aggregates = finalizeProducts(acc);
   const items = aggregates.map(({ meta, priceSeries, latestPrice }) => {
     const previousPrice = priceSeries.length > 1 ? priceSeries[priceSeries.length - 2] : priceSeries[priceSeries.length - 1];
-    let direction: "up" | "down" | "flat" = trendFlag(priceSeries);
+    const rawForecast = forecastNext7(priceSeries);
+    const forecast7 = rawForecast.map((value) => Math.max(0, value));
+    const predictedNext = forecast7.length ? forecast7[0] : latestPrice;
+
+    let direction: "up" | "down" | "flat" = "flat";
+    const lastActual = Number.isFinite(latestPrice) ? latestPrice : 0;
+    if (lastActual > predictedNext + 1) direction = "down";
+    else if (lastActual + 1 < predictedNext) direction = "up";
+    else direction = "flat";
+
     let changePercent: number | null = null;
     if (Number.isFinite(previousPrice) && Number.isFinite(latestPrice) && Number(previousPrice) > 0) {
       const delta = ((latestPrice - previousPrice) / Number(previousPrice)) * 100;
       changePercent = Number(delta.toFixed(1));
-      if (delta > 0.5) direction = "up";
-      else if (delta < -0.5) direction = "down";
-      else direction = "flat";
     }
-
-    const rawForecast = forecastNext7(priceSeries);
-    const forecast7 = rawForecast.map((value) => {
-      const nextValue = Math.max(0, value);
-      if (direction === "down") return Math.min(latestPrice, nextValue);
-      if (direction === "up") return Math.max(latestPrice, nextValue);
-      return nextValue;
-    });
 
     return {
       ...meta,
       price: latestPrice,
-      trend: trendFlag(priceSeries),
+      trend: direction,
       direction,
       changePercent,
       forecast7,
