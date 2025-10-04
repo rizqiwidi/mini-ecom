@@ -1,6 +1,4 @@
-﻿import Fuse from "fuse.js";
-import type { IFuseOptions } from "fuse.js";
-import { NextRequest, NextResponse } from "next/server";
+﻿import { NextRequest, NextResponse } from "next/server";
 import { join } from "node:path";
 import { readFile, stat } from "node:fs/promises";
 
@@ -31,51 +29,6 @@ const BRAND_KEYWORDS = new Set([
   "gigabyte",
   "surface",
 ]);
-
-const STOP_WORDS = new Set([
-  "with",
-  "dan",
-  "dengan",
-  "yang",
-  "and",
-  "the",
-  "atau",
-  "ke",
-  "di",
-]);
-
-const FUSE_OPTIONS: IFuseOptions<ProductItem> = {
-  includeScore: true,
-  threshold: 0.38,
-  ignoreLocation: true,
-  minMatchCharLength: 2,
-  keys: [
-    { name: "name", weight: 0.5 },
-    { name: "brand", weight: 0.3 },
-    { name: "category", weight: 0.15 },
-    { name: "marketplace", weight: 0.05 },
-    { name: "sku", weight: 0.35 },
-  ],
-};
-
-const TOKEN_SYNONYMS: Record<string, string[]> = {
-  intel: ["intel", "core", "i3", "i5", "i7", "i9", "corei3", "corei5", "corei7", "corei9"],
-  core: ["intel", "core", "i3", "i5", "i7", "i9"],
-  i3: ["i3", "intel", "core"],
-  i5: ["i5", "intel", "core"],
-  i7: ["i7", "intel", "core"],
-  i9: ["i9", "intel", "core"],
-  amd: ["amd", "ryzen", "r3", "r5", "r7", "r9"],
-  ryzen: ["ryzen", "amd", "r3", "r5", "r7", "r9"],
-  r3: ["r3", "ryzen", "amd"],
-  r5: ["r5", "ryzen", "amd"],
-  r7: ["r7", "ryzen", "amd"],
-  r9: ["r9", "ryzen", "amd"],
-  nvidia: ["nvidia", "geforce", "gtx", "rtx"],
-  geforce: ["geforce", "nvidia", "gtx", "rtx"],
-  gtx: ["gtx", "geforce", "nvidia", "rtx"],
-  rtx: ["rtx", "geforce", "nvidia", "gtx"],
-};
 
 let cachedData: ProductsPayload = null;
 let cachedLocalMtime: number | null = null;
@@ -156,67 +109,19 @@ function parsePayload(raw: string): ProductsPayload {
   return null;
 }
 
-function tokenizeQuery(query: string) {
-  return query
-    .toLowerCase()
-    .split(/\s+/)
-    .map((token) => token.replace(/[^a-z0-9]/g, ""))
-    .filter((token) => token.length > 1 && !STOP_WORDS.has(token));
-}
-
-function itemKey(item: ProductItem) {
-  return (item.sku ?? item.url ?? `${item.name ?? "unknown"}-${item.marketplace ?? ""}`).toLowerCase();
-}
-
-function normalizeWords(input: string) {
-  return input.split(/[^a-z0-9]+/).filter(Boolean);
-}
-
-function getSynonyms(token: string) {
-  return TOKEN_SYNONYMS[token] ?? [];
-}
-
-function levenshtein(a: string, b: string) {
-  if (a === b) return 0;
-  if (!a.length) return b.length;
-  if (!b.length) return a.length;
-  const matrix = Array.from({ length: a.length + 1 }, () => Array(b.length + 1).fill(0));
-  for (let i = 0; i <= a.length; i += 1) matrix[i][0] = i;
-  for (let j = 0; j <= b.length; j += 1) matrix[0][j] = j;
-  for (let i = 1; i <= a.length; i += 1) {
-    for (let j = 1; j <= b.length; j += 1) {
-      const cost = a[i - 1] === b[j - 1] ? 0 : 1;
-      matrix[i][j] = Math.min(matrix[i - 1][j] + 1, matrix[i][j - 1] + 1, matrix[i - 1][j - 1] + cost);
-    }
-  }
-  return matrix[a.length][b.length];
-}
-
-function matchesToken(token: string, haystack: string, words: string[]) {
-  if (!token) return true;
-  if (haystack.includes(token)) return true;
-  for (const synonym of getSynonyms(token)) {
-    if (haystack.includes(synonym)) return true;
-  }
-  for (const word of words) {
-    if (levenshtein(token, word) <= 1) return true;
-  }
-  return false;
-}
-
 function filterByTokens(items: ProductItem[], tokens: string[], rawQuery: string) {
   if (!tokens.length) return items;
   const brandTokens = tokens.filter((token) => BRAND_KEYWORDS.has(token));
-  const nonBrandTokens = tokens.filter((token) => !brandTokens.includes(token));
   const normalizedQuery = rawQuery.toLowerCase();
   return items.filter((item) => {
     const haystack = `${item.name ?? ""} ${item.brand ?? ""} ${item.category ?? ""} ${item.marketplace ?? ""} ${item.sku ?? ""}`.toLowerCase();
+    if (!tokens.every((token) => haystack.includes(token))) return false;
     if (normalizedQuery && item.sku) {
       const skuLower = item.sku.toLowerCase();
       if (normalizedQuery.includes("-")) {
         const condensed = normalizedQuery.replace(/[^a-z0-9]/g, "");
         if (!skuLower.replace(/[^a-z0-9]/g, "").includes(condensed)) return false;
-      } else if (!skuLower.includes(normalizedQuery) && normalizedQuery.length > 5) {
+      } else if (!skuLower.includes(normalizedQuery) && normalizedQuery.length > 4) {
         return false;
       }
     }
@@ -225,9 +130,6 @@ function filterByTokens(items: ProductItem[], tokens: string[], rawQuery: string
       if (!brandTokens.some((token) => brand.includes(token))) return false;
       const conflictingBrands = [...BRAND_KEYWORDS].filter((token) => !brandTokens.includes(token));
       if (conflictingBrands.some((token) => haystack.includes(token))) return false;
-    }
-    if (nonBrandTokens.length && !nonBrandTokens.some((token) => haystack.includes(token))) {
-      return false;
     }
     return true;
   });
@@ -287,7 +189,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ items: [], page: 1, totalPages: 1, totalItems: 0, pageSize: MAX_RESULTS });
   }
 
-  const tokens = tokenizeQuery(q);
+  const tokens = q.toLowerCase().split(/\s+/).filter(Boolean);
   const trendFilter = (req.nextUrl.searchParams.get("trend") || "all").toLowerCase();
   const priceFilter = (req.nextUrl.searchParams.get("price") || "all").toLowerCase();
   const sortMode = (req.nextUrl.searchParams.get("sort") || "relevance").toLowerCase();
@@ -297,55 +199,17 @@ export async function GET(req: NextRequest) {
   const data = await loadProducts();
   const items = Array.isArray(data?.items) ? (data.items as ProductItem[]) : [];
 
-  const fuse = new Fuse(items, FUSE_OPTIONS);
-  const fuseResults = fuse.search(q, { limit: 600 });
-  const fuseScoreMap = new Map<string, number>();
-  for (const result of fuseResults) {
-    const key = itemKey(result.item);
-    if (!fuseScoreMap.has(key)) {
-      fuseScoreMap.set(key, result.score ?? 0);
-    }
-  }
-
-  const approximateMatches = tokens.length
-    ? items.filter((item) => tokens.some((token) => `${item.name ?? ""} ${item.brand ?? ""} ${item.category ?? ""} ${item.marketplace ?? ""} ${item.sku ?? ""}`.toLowerCase().includes(token)))
-    : items.slice(0, 400);
-
-  const candidateMap = new Map<string, ProductItem>();
-  for (const result of fuseResults) {
-    candidateMap.set(itemKey(result.item), result.item);
-  }
-  for (const item of approximateMatches) {
-    const key = itemKey(item);
-    if (!candidateMap.has(key)) candidateMap.set(key, item);
-  }
-
-  const baseCandidates = Array.from(candidateMap.values());
-
-  const tokenFiltered = filterByTokens(baseCandidates, tokens, q);
+  const tokenFiltered = filterByTokens(items, tokens, q);
   const trendFiltered = applyTrendFilter(tokenFiltered, trendFilter);
   const priceFiltered = applyPriceFilter(trendFiltered, priceFilter);
   const ranked = rankProducts(q, priceFiltered as any) as ProductItem[];
   const sorted = applySorting(ranked, sortMode);
 
-  const reweighted = [...sorted].sort((a, b) => {
-    const keyA = itemKey(a);
-    const keyB = itemKey(b);
-    const fuseScoreA = fuseScoreMap.has(keyA) ? fuseScoreMap.get(keyA)! : 1;
-    const fuseScoreB = fuseScoreMap.has(keyB) ? fuseScoreMap.get(keyB)! : 1;
-    if (fuseScoreA !== fuseScoreB) return fuseScoreA - fuseScoreB;
-    const idxA = ranked.findIndex((x) => itemKey(x) === keyA);
-    const idxB = ranked.findIndex((x) => itemKey(x) === keyB);
-    return idxA - idxB;
-  });
-
-  const limited = reweighted.slice(0, MAX_RESULTS * 4);
-
-  const totalItems = limited.length;
+  const totalItems = sorted.length;
   const totalPages = Math.max(1, Math.ceil(totalItems / MAX_RESULTS));
   const currentPage = Math.min(page, totalPages);
   const start = (currentPage - 1) * MAX_RESULTS;
-  const paged = limited.slice(start, start + MAX_RESULTS);
+  const paged = sorted.slice(start, start + MAX_RESULTS);
 
   return NextResponse.json({
     items: paged,
@@ -355,9 +219,5 @@ export async function GET(req: NextRequest) {
     pageSize: MAX_RESULTS,
   });
 }
-
-
-
-
 
 
