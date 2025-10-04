@@ -1,9 +1,15 @@
-@tailwind base;
+﻿@tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 body {
   font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  background-color: #f9fafb;
-  color: #111827;
+  background-color: transparent;
+  color: inherit;
 }
+
+::selection {
+  background: rgba(129, 140, 248, 0.35);
+  color: #f8fafc;
+}
+

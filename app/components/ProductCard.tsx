@@ -1,6 +1,6 @@
-"use client";
+﻿"use client";
 
-import { FormEvent, useState } from "react";
+import { FormEvent, useMemo, useState } from "react";
 
 type ProductCardProps = {
   p: {
@@ -24,9 +24,9 @@ const ARROW_BY_TREND: Record<string, string> = {
 };
 
 const BADGE_BY_TREND: Record<string, string> = {
-  down: "bg-green-100 text-green-700",
-  up: "bg-red-100 text-red-700",
-  flat: "bg-gray-100 text-gray-700",
+  down: "bg-emerald-400/20 text-emerald-200 border border-emerald-300/30",
+  up: "bg-rose-400/20 text-rose-200 border border-rose-300/30",
+  flat: "bg-slate-400/20 text-slate-200 border border-slate-300/30",
 };
 
 const LABEL_BY_TREND: Record<string, string> = {
@@ -35,13 +35,20 @@ const LABEL_BY_TREND: Record<string, string> = {
   flat: "tren stabil",
 };
 
+const currency = new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", maximumFractionDigits: 0 });
+
 export default function ProductCard({ p }: ProductCardProps) {
   const trend = typeof p.trend === "string" ? p.trend : "flat";
   const arrow = ARROW_BY_TREND[trend] ?? ARROW_BY_TREND.flat;
   const badge = BADGE_BY_TREND[trend] ?? BADGE_BY_TREND.flat;
   const trendLabel = LABEL_BY_TREND[trend] ?? LABEL_BY_TREND.flat;
   const next = Array.isArray(p.forecast7) && p.forecast7.length ? p.forecast7[0] : null;
-  const soldLabel = typeof p.sold === "number" && p.sold >= 0 ? `Terjual ${p.sold.toLocaleString("id-ID")}` : null;
+  const soldLabel = useMemo(() => {
+    if (typeof p.sold === "number" && p.sold >= 0) {
+      return `Terjual ${p.sold.toLocaleString("id-ID")}`;
+    }
+    return null;
+  }, [p.sold]);
   const marketplace = p.marketplace?.trim() ?? "";
   const marketplaceLabel = marketplace ? `Lihat di ${marketplace}` : "Buka Tautan";
 
@@ -105,74 +112,89 @@ export default function ProductCard({ p }: ProductCardProps) {
   };
 
   return (
-    <div className="border rounded-2xl p-4 shadow-sm flex flex-col gap-2 bg-white">
-      <div className="text-lg font-semibold line-clamp-2">{p.name ?? "Tanpa nama"}</div>
-      <div className="text-sm text-gray-500">{p.brand || "-"} / {p.category || "-"}</div>
-      <div className="flex items-center gap-2">
-        <div className="text-xl font-bold">Rp {Number(displayPrice ?? 0).toLocaleString("id-ID")}</div>
-        <span className={`text-xs px-2 py-1 rounded ${badge}`}>{arrow} {trendLabel}</span>
-      </div>
-      {next !== null && (
-        <div className="text-sm">Prediksi besok: <b>Rp {Math.round(next).toLocaleString("id-ID")}</b></div>
-      )}
-      {soldLabel && <div className="text-sm text-gray-600">{soldLabel}</div>}
-      {p.url && (
-        <a
-          href={p.url}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="inline-flex w-fit items-center gap-2 text-sm font-medium text-indigo-600 hover:text-indigo-700"
+    <div className="group relative overflow-hidden rounded-3xl border border-white/10 bg-white/[0.07] p-6 text-white shadow-xl transition duration-200 hover:-translate-y-1 hover:border-indigo-400/40 hover:bg-white/[0.09]">
+      <div className="pointer-events-none absolute -top-12 right-0 h-32 w-32 rounded-full bg-indigo-500/40 blur-3xl transition group-hover:bg-indigo-400/50" />
+      <div className="flex flex-col gap-3">
+        <div>
+          <div className="text-lg font-semibold leading-snug line-clamp-2">{p.name ?? "Tanpa nama"}</div>
+          <div className="text-xs uppercase tracking-wide text-white/60">{p.brand || "-"} · {p.category || "-"}</div>
+        </div>
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <div className="text-2xl font-bold">{currency.format(displayPrice)}</div>
+            {soldLabel && <div className="text-xs text-white/60">{soldLabel}</div>}
+          </div>
+          <span className={`inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-semibold ${badge}`}>
+            {arrow} {trendLabel}
+          </span>
+        </div>
+        {next !== null && (
+          <div className="rounded-2xl border border-white/10 bg-white/10 px-3 py-2 text-xs text-white/80">
+            Prediksi harga besok: <span className="font-semibold text-white">{currency.format(Math.round(next))}</span>
+          </div>
+        )}
+        {p.url && (
+          <a
+            href={p.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex w-fit items-center gap-2 rounded-full border border-white/20 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-white/80 transition hover:border-white/40 hover:text-white"
+          >
+            {marketplaceLabel}
+            <span aria-hidden>{"\u2197"}</span>
+          </a>
+        )}
+        <button
+          type="button"
+          className="w-fit rounded-2xl border border-white/20 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-white/80 transition hover:border-white/40 hover:text-white"
+          onClick={() => {
+            setShowForm((prev) => !prev);
+            setStatus("idle");
+            setMessage(null);
+          }}
         >
-          {marketplaceLabel}
-          <span aria-hidden>{"\u2197"}</span>
-        </a>
-      )}
-
-      <button
-        type="button"
-        className="mt-2 w-fit rounded-xl border px-3 py-1 text-sm text-indigo-600 hover:bg-indigo-50"
-        onClick={() => {
-          setShowForm((prev) => !prev);
-          setStatus("idle");
-          setMessage(null);
-        }}
-      >
-        Update Harga
-      </button>
-
-      {message && !showForm && (
-        <span className={`text-xs ${status === "error" ? "text-red-600" : "text-green-600"}`}>
-          {message}
-        </span>
-      )}
+          Update Harga
+        </button>
+        {message && !showForm && (
+          <span className={`text-xs ${status === "error" ? "text-rose-300" : "text-emerald-300"}`} aria-live="polite">
+            {message}
+          </span>
+        )}
+      </div>
 
       {showForm && (
-        <form className="mt-2 grid gap-2" onSubmit={handleFeedback}>
-          <input
-            className="border rounded-xl px-3 py-2 text-sm"
-            placeholder="Harga terbaru (Rp)"
-            inputMode="numeric"
-            value={formattedInputPrice}
-            onChange={(e) => handlePriceInput(e.target.value)}
-            required
-          />
-          <textarea
-            className="border rounded-xl px-3 py-2 text-sm"
-            placeholder="Catatan tambahan (opsional)"
-            value={note}
-            onChange={(e) => setNote(e.target.value)}
-            rows={2}
-          />
-          <div className="flex items-center gap-2">
+        <form className="mt-4 grid gap-3 rounded-2xl border border-white/10 bg-white/10 p-4 text-sm text-white" onSubmit={handleFeedback}>
+          <div className="grid gap-2">
+            <label className="text-xs uppercase tracking-wide text-white/60">Harga terbaru</label>
+            <input
+              className="rounded-xl border border-white/20 bg-black/20 px-3 py-2 text-white placeholder:text-white/40 focus:border-indigo-300 focus:outline-none focus:ring-2 focus:ring-indigo-400/40"
+              placeholder="Rp 15.000.000"
+              inputMode="numeric"
+              value={formattedInputPrice}
+              onChange={(e) => handlePriceInput(e.target.value)}
+              required
+            />
+          </div>
+          <div className="grid gap-2">
+            <label className="text-xs uppercase tracking-wide text-white/60">Catatan</label>
+            <textarea
+              className="rounded-xl border border-white/20 bg-black/20 px-3 py-2 text-white placeholder:text-white/40 focus:border-indigo-300 focus:outline-none focus:ring-2 focus:ring-indigo-400/40"
+              placeholder="Contoh: harga per 4 Oktober di toko resmi"
+              value={note}
+              onChange={(e) => setNote(e.target.value)}
+              rows={2}
+            />
+          </div>
+          <div className="flex items-center justify-between gap-2">
             <button
               type="submit"
-              className="rounded-xl bg-indigo-600 px-3 py-1 text-sm text-white hover:bg-indigo-700 disabled:bg-indigo-300"
+              className="rounded-xl bg-indigo-500 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-white shadow-md shadow-indigo-500/40 transition hover:bg-indigo-400 disabled:cursor-not-allowed disabled:bg-white/20"
               disabled={status === "loading"}
             >
               {status === "loading" ? "Mengirim..." : "Kirim"}
             </button>
             {message && (
-              <span className={`text-xs ${status === "error" ? "text-red-600" : "text-green-600"}`}>
+              <span className={`text-xs ${status === "error" ? "text-rose-300" : "text-emerald-300"}`} aria-live="polite">
                 {message}
               </span>
             )}
@@ -180,7 +202,7 @@ export default function ProductCard({ p }: ProductCardProps) {
         </form>
       )}
 
-      <div className="mt-auto text-sm text-gray-400">SKU: {p.sku}</div>
+      <div className="mt-6 text-xs text-white/50">SKU: {p.sku}</div>
     </div>
   );
 }
@@ -191,3 +213,4 @@ function formatRupiah(digits: string) {
   if (!Number.isFinite(number)) return digits;
   return new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", maximumFractionDigits: 0 }).format(number);
 }
+

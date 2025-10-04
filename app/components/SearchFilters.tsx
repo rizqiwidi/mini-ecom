@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useRouter, useSearchParams } from "next/navigation";
 
@@ -23,6 +23,8 @@ const sortOptions = [
   { value: "sold-desc", label: "Terjual Terbanyak" },
 ];
 
+const baseSelectClasses = "rounded-xl border border-white/10 bg-white/10 px-4 py-2 pr-10 text-sm text-white shadow-sm focus:border-indigo-300 focus:outline-none focus:ring-2 focus:ring-indigo-400/40";
+
 export default function SearchFilters({ totalItems }: { totalItems: number }) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -40,54 +42,62 @@ export default function SearchFilters({ totalItems }: { totalItems: number }) {
     router.replace(query ? `/?${query}` : "/");
   };
 
+  const resetFilters = () => {
+    const params = new URLSearchParams(Array.from(searchParams.entries()));
+    ["trend", "price", "sort", "page"].forEach((key) => params.delete(key));
+    router.replace("/?" + params.toString());
+  };
+
+  const hasCustomFilters = trend !== "all" || price !== "all" || sort !== "relevance";
+
   return (
-    <div className="flex flex-wrap items-center gap-3 text-sm">
-      <label className="flex items-center gap-2">
-        <span className="text-gray-500">Tren</span>
-        <select
-          className="border rounded-xl px-3 py-2"
-          value={trend}
-          onChange={(e) => updateParam("trend", e.target.value, "all")}
-        >
+    <div className="flex flex-wrap items-center gap-4 text-sm text-white/80">
+      <div className="flex items-center gap-2">
+        <span className="text-xs uppercase tracking-wide text-white/60">Tren</span>
+        <select className={baseSelectClasses} value={trend} onChange={(e) => updateParam("trend", e.target.value, "all")}>
           {trendOptions.map((opt) => (
-            <option key={opt.value} value={opt.value}>
+            <option key={opt.value} value={opt.value} className="text-slate-900">
               {opt.label}
             </option>
           ))}
         </select>
-      </label>
+      </div>
 
-      <label className="flex items-center gap-2">
-        <span className="text-gray-500">Harga</span>
-        <select
-          className="border rounded-xl px-3 py-2"
-          value={price}
-          onChange={(e) => updateParam("price", e.target.value, "all")}
-        >
+      <div className="flex items-center gap-2">
+        <span className="text-xs uppercase tracking-wide text-white/60">Harga</span>
+        <select className={baseSelectClasses} value={price} onChange={(e) => updateParam("price", e.target.value, "all")}>
           {priceOptions.map((opt) => (
-            <option key={opt.value} value={opt.value}>
+            <option key={opt.value} value={opt.value} className="text-slate-900">
               {opt.label}
             </option>
           ))}
         </select>
-      </label>
+      </div>
 
-      <label className="flex items-center gap-2">
-        <span className="text-gray-500">Urutkan</span>
-        <select
-          className="border rounded-xl px-3 py-2"
-          value={sort}
-          onChange={(e) => updateParam("sort", e.target.value, "relevance")}
-        >
+      <div className="flex items-center gap-2">
+        <span className="text-xs uppercase tracking-wide text-white/60">Urutkan</span>
+        <select className={baseSelectClasses} value={sort} onChange={(e) => updateParam("sort", e.target.value, "relevance")}>
           {sortOptions.map((opt) => (
-            <option key={opt.value} value={opt.value}>
+            <option key={opt.value} value={opt.value} className="text-slate-900">
               {opt.label}
             </option>
           ))}
         </select>
-      </label>
+      </div>
 
-      <span className="text-xs text-gray-500">Total hasil: {totalItems.toLocaleString("id-ID")}</span>
+      <span className="ml-auto text-xs text-white/60">Total hasil: {totalItems.toLocaleString("id-ID")}</span>
+
+      {hasCustomFilters && (
+        <button
+          type="button"
+          onClick={resetFilters}
+          className="inline-flex items-center gap-1 rounded-xl border border-white/20 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-white/80 transition hover:border-white/40 hover:text-white"
+        >
+          Reset filter
+        </button>
+      )}
     </div>
   );
 }
+
+

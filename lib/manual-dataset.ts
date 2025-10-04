@@ -1,4 +1,4 @@
-import { existsSync } from "node:fs";
+﻿import { existsSync } from "node:fs";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 
@@ -59,3 +59,4 @@ export async function appendManualEntry(relative: string, entry: any) {
   await writeManualList(relative, list);
   return list;
 }
+

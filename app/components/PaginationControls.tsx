@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useRouter, useSearchParams } from "next/navigation";
 
@@ -13,7 +13,7 @@ export default function PaginationControls({ page, totalPages, totalItems }: Pro
   const searchParams = useSearchParams();
 
   const setPage = (target: number) => {
-    const clamped = Math.min(Math.max(target, 1), totalPages);
+    const clamped = Math.min(Math.max(target, 1), Math.max(totalPages, 1));
     const params = new URLSearchParams(Array.from(searchParams.entries()));
     if (clamped <= 1) params.delete("page");
     else params.set("page", clamped.toString());
@@ -24,30 +24,23 @@ export default function PaginationControls({ page, totalPages, totalItems }: Pro
   const goPrev = () => setPage(page - 1);
   const goNext = () => setPage(page + 1);
 
+  const buttonClasses = "inline-flex items-center justify-center rounded-2xl border border-white/20 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-white/80 transition hover:border-white/40 hover:text-white disabled:cursor-not-allowed disabled:border-white/10 disabled:text-white/30";
+
   return (
-    <div className="flex flex-col items-center gap-2 text-sm text-center">
-      <div className="flex items-center gap-2">
-        <button
-          type="button"
-          className="rounded-xl border px-3 py-1 disabled:opacity-50"
-          onClick={goPrev}
-          disabled={page <= 1}
-        >
+    <div className="mx-auto flex w-full max-w-xl flex-col items-center gap-3 rounded-3xl border border-white/10 bg-white/5 p-4 text-center text-sm text-white/80 backdrop-blur">
+      <div className="flex items-center justify-center gap-3">
+        <button type="button" className={buttonClasses} onClick={goPrev} disabled={page <= 1}>
           Sebelumnya
         </button>
-        <span className="text-gray-600">
-          Halaman {page} dari {totalPages}
+        <span className="rounded-2xl border border-white/15 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-white">
+          Halaman {page} / {Math.max(totalPages, 1)}
         </span>
-        <button
-          type="button"
-          className="rounded-xl border px-3 py-1 disabled:opacity-50"
-          onClick={goNext}
-          disabled={page >= totalPages}
-        >
+        <button type="button" className={buttonClasses} onClick={goNext} disabled={page >= totalPages}>
           Selanjutnya
         </button>
       </div>
-      <span className="text-xs text-gray-500">Total hasil menemukan {totalItems.toLocaleString("id-ID")} produk.</span>
+      <span className="text-xs text-white/60">Total hasil: {totalItems.toLocaleString("id-ID")} produk</span>
     </div>
   );
 }
+
