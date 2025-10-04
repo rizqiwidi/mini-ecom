@@ -20,7 +20,17 @@ export function linearTrend(values: number[]) {
 export function forecastNext7(values: number[]) {
   const level = ewma(values);
   const slope = linearTrend(values);
-  return Array.from({ length: 7 }, (_, k) => Math.max(0, level + (k + 1) * slope));
+  const raw = Array.from({ length: 7 }, (_, k) => level + (k + 1) * slope);
+  return raw.map((value, index) => {
+    const lastActual = values[values.length - 1];
+    if (slope < 0) {
+      return Math.min(lastActual, Math.max(0, value));
+    }
+    if (slope > 0) {
+      return Math.max(lastActual, value);
+    }
+    return Math.max(0, value);
+  });
 }
 
 export function trendFlag(values: number[]) {
@@ -34,36 +44,4 @@ export function trendFlag(values: number[]) {
   if (slope > threshold) return "up";
   if (slope < -threshold) return "down";
   return "flat";
-}
-
-export function forecastNextValue(values: number[]) {
-  if (!Array.isArray(values) || !values.length) return 0;
-  const [first] = forecastNext7(values);
-  if (!Number.isFinite(first)) return 0;
-  return first;
-}
-
-export function forecastAccuracy(values: number[]): number | null {
-  if (!Array.isArray(values) || values.length < 3) return null;
-  const n = values.length;
-  const horizon = Math.min(7, n - 1);
-  let apeSum = 0;
-  let count = 0;
-  for (let idx = n - horizon; idx < n; idx++) {
-    const history = values.slice(0, idx);
-    if (history.length < 2) continue;
-    const forecast = forecastNext7(history)[0];
-    const actual = values[idx];
-    if (!Number.isFinite(actual) || actual <= 0) continue;
-    const predicted = Number.isFinite(forecast) ? Math.max(0, forecast) : history[history.length - 1];
-    const ape = Math.abs((actual - predicted) / actual);
-    if (Number.isFinite(ape)) {
-      apeSum += ape;
-      count += 1;
-    }
-  }
-  if (!count) return null;
-  const mape = (apeSum / count) * 100;
-  const accuracy = Math.max(0, Math.min(100, 100 - mape));
-  return Number(accuracy.toFixed(1));
 }

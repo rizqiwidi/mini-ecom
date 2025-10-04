@@ -1,4 +1,4 @@
-﻿import { headers } from "next/headers";
+import { headers } from "next/headers";
 
 import SearchBar from "./components/SearchBar";
 import SearchFilters from "./components/SearchFilters";
@@ -140,18 +140,24 @@ export default async function Page({
       <section className="rounded-3xl border border-white/10 bg-white/5 p-6 shadow-lg backdrop-blur">
         <div className="space-y-4">
           <SearchBar />
-          <SearchFilters totalItems={totalItems} />
+          <div className="flex flex-col gap-3 rounded-2xl border border-white/10 bg-white/5 p-4 text-sm text-white/80 backdrop-blur">
+            <SearchFilters totalItems={totalItems} />
+            {searchQuery && (
+              <div className="flex flex-col gap-1">
+                <div className="font-semibold text-white">
+                  Menampilkan hasil untuk: <span className="text-indigo-300">{searchQuery}</span>
+                </div>
+                <div>{filtersApplied || "Tidak ada filter tambahan yang aktif."}</div>
+              </div>
+            )}
+            {!searchQuery && (
+              <div className="text-xs text-white/70">
+                Mulai dengan mengetik nama produk, merek, atau spesifikasi. Contoh: <span className="font-semibold text-white">"asus tuf rtx"</span> atau <span className="font-semibold text-white">"macbook m2"</span>.
+              </div>
+            )}
+          </div>
         </div>
       </section>
-
-      {searchQuery && (
-        <div className="flex flex-col gap-2 rounded-2xl border border-white/10 bg-white/5 p-4 text-sm text-white/80 backdrop-blur">
-          <div className="font-semibold text-white">
-            Menampilkan hasil untuk: <span className="text-indigo-300">{searchQuery}</span>
-          </div>
-          <div>{filtersApplied || "Tidak ada filter tambahan yang aktif."}</div>
-        </div>
-      )}
 
       <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
         {items.map((p: any) => (
@@ -165,12 +171,6 @@ export default async function Page({
         </div>
       )}
 
-      {!searchQuery && (
-        <div className="rounded-3xl border border-white/10 bg-white/5 p-6 text-sm text-white/70">
-          Mulai dengan mengetik nama produk, merek, atau spesifikasi. Contoh: <span className="font-semibold text-white">"asus tuf rtx"</span> atau <span className="font-semibold text-white">"macbook m2"</span>.
-        </div>
-      )}
-
       {searchQuery && totalPages > 1 && (
         <PaginationControls page={currentPage} totalPages={totalPages} totalItems={totalItems} />
       )}
@@ -181,13 +181,3 @@ export default async function Page({
     </div>
   );
 }
-
-
-
-
-
-
-
-
-
-

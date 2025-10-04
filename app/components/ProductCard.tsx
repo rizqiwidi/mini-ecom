@@ -17,7 +17,6 @@ type ProductCardProps = {
     marketplace?: string;
     url?: string;
     sold?: number;
-    accuracy?: number | null;
     changePercent?: number | null;
   };
 };
@@ -44,22 +43,15 @@ const currency = new Intl.NumberFormat("id-ID", { style: "currency", currency: "
 
 export default function ProductCard({ p }: ProductCardProps) {
   const rawTrend = typeof p.trend === "string" ? p.trend : "flat";
-  const computedDirection = (() => {
-    if (typeof p.direction === "string" && ["up", "down", "flat"].includes(p.direction)) {
-      return p.direction;
-    }
-    if (typeof p.changePercent === "number" && Number.isFinite(p.changePercent)) {
-      if (p.changePercent > 0.5) return "up";
-      if (p.changePercent < -0.5) return "down";
-      return "flat";
-    }
-    return rawTrend;
-  })();
-  const direction = computedDirection;
+  const direction = typeof p.direction === "string" && ["up", "down", "flat"].includes(p.direction) ? p.direction : rawTrend;
   const arrow = ARROW_BY_TREND[direction] ?? ARROW_BY_TREND.flat;
   const badge = BADGE_BY_TREND[direction] ?? BADGE_BY_TREND.flat;
   const trendLabel = LABEL_BY_TREND[direction] ?? LABEL_BY_TREND.flat;
   const next = Array.isArray(p.forecast7) && p.forecast7.length ? p.forecast7[0] : null;
+  const changePercent =
+    typeof p.changePercent === "number" && Number.isFinite(p.changePercent)
+      ? Number(p.changePercent.toFixed(1))
+      : null;
 
   const soldLabel = useMemo(() => {
     if (typeof p.sold === "number" && p.sold >= 0) {
@@ -69,14 +61,6 @@ export default function ProductCard({ p }: ProductCardProps) {
   }, [p.sold]);
   const marketplace = p.marketplace?.trim() ?? "";
   const marketplaceLabel = marketplace ? `Lihat di ${marketplace}` : "Buka Tautan";
-  const accuracyValue =
-    typeof p.accuracy === "number" && Number.isFinite(p.accuracy)
-      ? Math.max(0, Math.min(100, p.accuracy))
-      : null;
-  const changePercent =
-    typeof p.changePercent === "number" && Number.isFinite(p.changePercent)
-      ? Number(p.changePercent.toFixed(1))
-      : null;
 
   const [showForm, setShowForm] = useState(false);
   const [displayPrice, setDisplayPrice] = useState(Number(p.price ?? 0));
@@ -157,9 +141,6 @@ export default function ProductCard({ p }: ProductCardProps) {
           <div>
             <div className="text-2xl font-bold">{currency.format(displayPrice)}</div>
             {soldLabel && <div className="text-xs text-white/60">{soldLabel}</div>}
-            <div className="text-xs text-white/60">
-              Akurasi forecast: <span className="font-semibold text-white">{accuracyValue !== null ? `${accuracyValue.toFixed(1)}%` : "Belum tersedia"}</span>
-            </div>
             {changePercent !== null && (
               <div className="text-xs text-white/60">
                 Perubahan terbaru: <span className={`font-semibold ${changePercent > 0 ? "text-emerald-200" : changePercent < 0 ? "text-rose-200" : "text-white"}`}>
