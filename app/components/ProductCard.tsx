@@ -12,12 +12,10 @@ type ProductCardProps = {
     category?: string;
     price?: number;
     trend?: "up" | "down" | "flat";
-    direction?: "up" | "down" | "flat";
     forecast7?: number[];
     marketplace?: string;
     url?: string;
     sold?: number;
-    changePercent?: number | null;
   };
 };
 
@@ -42,17 +40,25 @@ const LABEL_BY_TREND: Record<string, string> = {
 const currency = new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", maximumFractionDigits: 0 });
 
 export default function ProductCard({ p }: ProductCardProps) {
-  const rawTrend = typeof p.trend === "string" ? p.trend : "flat";
-  const direction = typeof p.direction === "string" && ["up", "down", "flat"].includes(p.direction) ? p.direction : rawTrend;
+  const fallbackTrend = typeof p.trend === "string" ? p.trend : "flat";
+  const forecastNext = Array.isArray(p.forecast7) && p.forecast7.length ? Number(p.forecast7[0]) : null;
+  const latestPrice = Number(p.price ?? NaN);
+  const tolerance = 1; // minimal difference in IDR to avoid oscillation
+  const derivedDirection = useMemo(() => {
+    if (Number.isFinite(latestPrice) && Number.isFinite(forecastNext)) {
+      if (latestPrice > (forecastNext as number) + tolerance) return "down" as const;
+      if (latestPrice + tolerance < (forecastNext as number)) return "up" as const;
+      return "flat" as const;
+    }
+    return fallbackTrend;
+  }, [fallbackTrend, forecastNext, latestPrice]);
+
+  const direction = derivedDirection;
   const arrow = ARROW_BY_TREND[direction] ?? ARROW_BY_TREND.flat;
   const badge = BADGE_BY_TREND[direction] ?? BADGE_BY_TREND.flat;
   const trendLabel = LABEL_BY_TREND[direction] ?? LABEL_BY_TREND.flat;
-  const next = Array.isArray(p.forecast7) && p.forecast7.length ? p.forecast7[0] : null;
-  const changePercent =
-    typeof p.changePercent === "number" && Number.isFinite(p.changePercent)
-      ? Number(p.changePercent.toFixed(1))
-      : null;
 
+  const next = forecastNext;
   const soldLabel = useMemo(() => {
     if (typeof p.sold === "number" && p.sold >= 0) {
       return `Terjual ${p.sold.toLocaleString("id-ID")}`;
@@ -141,22 +147,14 @@ export default function ProductCard({ p }: ProductCardProps) {
           <div>
             <div className="text-2xl font-bold">{currency.format(displayPrice)}</div>
             {soldLabel && <div className="text-xs text-white/60">{soldLabel}</div>}
-            {changePercent !== null && (
-              <div className="text-xs text-white/60">
-                Perubahan terbaru: <span className={`font-semibold ${changePercent > 0 ? "text-emerald-200" : changePercent < 0 ? "text-rose-200" : "text-white"}`}>
-                  {changePercent > 0 ? "+" : ""}
-                  {changePercent.toFixed(1)}%
-                </span>
-              </div>
-            )}
           </div>
           <span className={`inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-semibold ${badge}`}>
             {arrow} {trendLabel}
           </span>
         </div>
-        {next !== null && (
+        {Number.isFinite(next) && (
           <div className="rounded-2xl border border-white/10 bg-white/10 px-3 py-2 text-xs text-white/80">
-            Prediksi harga dalam 7 hari: <span className="font-semibold text-white">{currency.format(Math.round(next))}</span>
+            Prediksi harga besok: <span className="font-semibold text-white">{currency.format(Math.round(next as number))}</span>
           </div>
         )}
         {p.url && (

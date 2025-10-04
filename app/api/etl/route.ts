@@ -51,33 +51,12 @@ export async function POST(req: NextRequest) {
   }
 
   const aggregates = finalizeProducts(acc);
-  const items = aggregates.map(({ meta, priceSeries, latestPrice }) => {
-    const previousPrice = priceSeries.length > 1 ? priceSeries[priceSeries.length - 2] : priceSeries[priceSeries.length - 1];
-    const rawForecast = forecastNext7(priceSeries);
-    const forecast7 = rawForecast.map((value) => Math.max(0, value));
-    const predictedNext = forecast7.length ? forecast7[0] : latestPrice;
-
-    let direction: "up" | "down" | "flat" = "flat";
-    const lastActual = Number.isFinite(latestPrice) ? latestPrice : 0;
-    if (lastActual > predictedNext + 1) direction = "down";
-    else if (lastActual + 1 < predictedNext) direction = "up";
-    else direction = "flat";
-
-    let changePercent: number | null = null;
-    if (Number.isFinite(previousPrice) && Number.isFinite(latestPrice) && Number(previousPrice) > 0) {
-      const delta = ((latestPrice - previousPrice) / Number(previousPrice)) * 100;
-      changePercent = Number(delta.toFixed(1));
-    }
-
-    return {
-      ...meta,
-      price: latestPrice,
-      trend: direction,
-      direction,
-      changePercent,
-      forecast7,
-    };
-  });
+  const items = aggregates.map(({ meta, priceSeries, latestPrice }) => ({
+    ...meta,
+    price: latestPrice,
+    trend: trendFlag(priceSeries),
+    forecast7: forecastNext7(priceSeries),
+  }));
 
   await uploadBlob("processed/products.json", JSON.stringify({ items }));
   return NextResponse.json({ ok: true, count: items.length });

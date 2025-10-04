@@ -11,7 +11,6 @@ export type ProductDoc = {
   marketplace?: string;
   url?: string;
   sold?: number;
-  changePercent?: number | null;
 };
 
 export function scoreQuery(q: string, p: ProductDoc) {
