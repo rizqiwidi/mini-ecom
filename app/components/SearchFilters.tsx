@@ -41,7 +41,7 @@ export default function SearchFilters({ totalItems }: { totalItems: number }) {
   };
 
   return (
-    <div className="flex flex-wrap gap-3 items-center text-sm">
+    <div className="flex flex-wrap items-center gap-3 text-sm">
       <label className="flex items-center gap-2">
         <span className="text-gray-500">Tren</span>
         <select
