@@ -118,6 +118,8 @@ function filterByTokens(items: ProductItem[], tokens: string[]) {
     if (brandTokens.length) {
       const brand = String(item.brand ?? "").toLowerCase();
       if (!brandTokens.some((token) => brand.includes(token))) return false;
+      const conflictingBrands = [...BRAND_KEYWORDS].filter((token) => !brandTokens.includes(token));
+      if (conflictingBrands.some((token) => haystack.includes(token))) return false;
     }
     return true;
   });

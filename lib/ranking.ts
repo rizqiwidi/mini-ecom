@@ -20,12 +20,17 @@ export function scoreQuery(q: string, p: ProductDoc) {
   const tokens = qn.split(/\s+/).filter(Boolean);
   if (tokens.length) {
     const brand = (p.brand ?? "").toLowerCase();
-    for (const token of tokens) {
-      if (brand.includes(token)) score += 4;
+    const brandTokens = tokens.filter((token) => BRAND_TOKENS.has(token));
+    if (brandTokens.length) {
+      if (brandTokens.some((token) => brand.includes(token))) score += 12;
+      else score -= 20;
+      const conflictingBrandInName = [...BRAND_TOKENS]
+        .filter((token) => !brandTokens.includes(token))
+        .some((token) => hay.includes(token));
+      if (conflictingBrandInName) score -= 25;
     }
-    if (brand && tokens.some((token) => BRAND_TOKENS.has(token)) && !tokens.some((token) => brand.includes(token))) {
-      score -= 5;
-    }
+    const nameTokensMatched = tokens.filter((token) => (p.name ?? "").toLowerCase().includes(token)).length;
+    score += nameTokensMatched * 4;
   }
   if (p.trend === "down") score += 2;
   if (p.isOnSale) score += 3;
