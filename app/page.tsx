@@ -1,3 +1,5 @@
+import { headers } from "next/headers";
+
 import SearchBar from "./components/SearchBar";
 import SearchFilters from "./components/SearchFilters";
 import ProductCard from "./components/ProductCard";
@@ -9,6 +11,16 @@ function resolveBaseUrl() {
   if (configured) return configured.replace(/\/$/, "");
   const projectDomain = process.env.VERCEL_PROJECT_DOMAIN?.trim();
   if (projectDomain) return `https://${projectDomain.replace(/\/$/, "")}`;
+  try {
+    const hdrs = headers();
+    const host = hdrs.get("host");
+    if (host) {
+      const proto = hdrs.get("x-forwarded-proto") ?? "https";
+      return `${proto}://${host.replace(/\/$/, "")}`;
+    }
+  } catch {
+    // headers() is only available in request context; ignore if not.
+  }
   const vercel = process.env.VERCEL_URL?.trim();
   if (vercel) return `https://${vercel.replace(/\/$/, "")}`;
   const port = process.env.PORT ? Number(process.env.PORT) : 3000;
