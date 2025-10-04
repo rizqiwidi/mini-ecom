@@ -81,6 +81,8 @@ async function loadFromRemote(): Promise<ProductsPayload> {
 function resolveBaseUrl() {
   const configured = process.env.NEXT_PUBLIC_BASE_URL?.trim();
   if (configured) return configured.replace(/\/$/, "");
+  const projectDomain = process.env.VERCEL_PROJECT_DOMAIN?.trim();
+  if (projectDomain) return `https://${projectDomain.replace(/\/$/, "")}`;
   const vercel = process.env.VERCEL_URL?.trim();
   if (vercel) return `https://${vercel.replace(/\/$/, "")}`;
   return "";

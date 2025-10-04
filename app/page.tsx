@@ -7,6 +7,8 @@ import PaginationControls from "./components/PaginationControls";
 function resolveBaseUrl() {
   const configured = process.env.NEXT_PUBLIC_BASE_URL?.trim();
   if (configured) return configured.replace(/\/$/, "");
+  const projectDomain = process.env.VERCEL_PROJECT_DOMAIN?.trim();
+  if (projectDomain) return `https://${projectDomain.replace(/\/$/, "")}`;
   const vercel = process.env.VERCEL_URL?.trim();
   if (vercel) return `https://${vercel.replace(/\/$/, "")}`;
   const port = process.env.PORT ? Number(process.env.PORT) : 3000;
