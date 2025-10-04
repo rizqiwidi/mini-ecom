@@ -8,6 +8,10 @@ on:
 jobs:
   build-deploy:
     runs-on: ubuntu-latest
+    env:
+      BLOB_READ_WRITE_TOKEN: ${{ secrets.BLOB_READ_WRITE_TOKEN }}
+      VERCEL_PROJECT_DOMAIN: ${{ secrets.VERCEL_PROJECT_DOMAIN }}
+      NEXT_PUBLIC_BASE_URL: ${{ secrets.NEXT_PUBLIC_BASE_URL }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -22,8 +26,6 @@ jobs:
 
       - name: Build
         run: npm run build
-        env:
-          NEXT_PUBLIC_BASE_URL: ${{ secrets.NEXT_PUBLIC_BASE_URL }}
 
       - name: Deploy to Vercel (Production)
         run: |
@@ -37,9 +39,6 @@ jobs:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
 
       - name: (Optional) Trigger ETL on Production
-        if: ${{ secrets.BLOB_READ_WRITE_TOKEN != '' }}
+        if: ${{ env.BLOB_READ_WRITE_TOKEN != '' }}
         run: |
-          curl -X POST "https://$VERCEL_PROJECT_DOMAIN/api/etl" -H "x-cron-token: $BLOB_READ_WRITE_TOKEN"
-        env:
-          BLOB_READ_WRITE_TOKEN: ${{ secrets.BLOB_READ_WRITE_TOKEN }}
-          VERCEL_PROJECT_DOMAIN: ${{ secrets.VERCEL_PROJECT_DOMAIN }}
+          curl -X POST "https://${{ env.VERCEL_PROJECT_DOMAIN }}/api/etl" -H "x-cron-token: $BLOB_READ_WRITE_TOKEN"
