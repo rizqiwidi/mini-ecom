@@ -1,20 +1,22 @@
-﻿"use client";
+"use client";
 import { useRouter, useSearchParams } from "next/navigation";
 import { FormEvent, useEffect, useRef, useState } from "react";
 
 import { useToast } from "./ToastProvider";
 
-type WordLimitResult = { value: string; truncated: boolean };
+type ClipResult = { value: string; truncated: boolean };
 
 const MAX_WORDS = 5;
 
-function sanitizeSearchInput(value: string): WordLimitResult {
-  const words = value.trim().split(/\s+/).filter(Boolean);
-  if (!words.length) {
-    return { value: "", truncated: false };
-  }
-  const limited = words.slice(0, MAX_WORDS);
-  return { value: limited.join(" "), truncated: words.length > limited.length };
+function clipSearchValue(raw: string): ClipResult {
+  const words = raw.trim().split(/\s+/).filter(Boolean);
+  if (!words.length) return { value: "", truncated: false };
+  const clipped = words.slice(0, MAX_WORDS).join(" ");
+  return { value: clipped, truncated: words.length > MAX_WORDS };
+}
+
+function normalizeSpaces(value: string) {
+  return value.replace(/\s+/g, " ").replace(/\u00A0/g, " ");
 }
 
 export default function SearchBar() {
@@ -22,42 +24,55 @@ export default function SearchBar() {
   const searchParams = useSearchParams();
   const { push } = useToast();
   const truncatedNoticeShown = useRef(false);
-  const initialSanitized = sanitizeSearchInput(searchParams.get("q") ?? "").value;
-  const [term, setTerm] = useState(initialSanitized);
+  const initialResult = clipSearchValue(searchParams.get("q") ?? "");
+  const [term, setTerm] = useState(initialResult.value);
 
   useEffect(() => {
-    const result = sanitizeSearchInput(searchParams.get("q") ?? "");
+    const result = clipSearchValue(searchParams.get("q") ?? "");
     setTerm(result.value);
+    truncatedNoticeShown.current = result.truncated;
   }, [searchParams]);
 
   const handleSubmit = (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const params = new URLSearchParams(Array.from(searchParams.entries()));
-    const result = sanitizeSearchInput(term);
+    const result = clipSearchValue(term);
     if (result.value) params.set("q", result.value);
     else params.delete("q");
     params.delete("page");
     const query = params.toString();
     router.push(query ? `/?${query}` : "/");
     if (result.value) {
-      push({ title: "Mencari produk", description: `Kata kunci: \"${result.value}\"`, variant: "info", durationMs: 2500 });
+      const description = result.truncated
+        ? `Kata kunci dipotong menjadi: "${result.value}"`
+        : `Kata kunci: "${result.value}"`;
+      push({ title: "Mencari produk", description, variant: "info", durationMs: 2500 });
     }
   };
 
   const handleInputChange = (raw: string) => {
-    const result = sanitizeSearchInput(raw);
-    setTerm(result.value);
-    const trimmed = raw.trim();
-    if (result.truncated && !truncatedNoticeShown.current && trimmed) {
+    const normalized = normalizeSpaces(raw);
+    const trimmed = normalized.trim();
+    if (!trimmed) {
+      setTerm(normalized);
+      truncatedNoticeShown.current = false;
+      return;
+    }
+    const words = trimmed.split(" ");
+    if (words.length <= MAX_WORDS) {
+      setTerm(normalized);
+      truncatedNoticeShown.current = false;
+      return;
+    }
+    const clipped = words.slice(0, MAX_WORDS).join(" ");
+    setTerm(clipped);
+    if (!truncatedNoticeShown.current) {
       truncatedNoticeShown.current = true;
       push({
         title: "Maksimal 5 kata",
         description: "Kami hanya mengambil lima kata pertama untuk menjaga pencarian tetap cepat.",
         variant: "warning",
       });
-    }
-    if (!result.truncated) {
-      truncatedNoticeShown.current = false;
     }
   };
 
@@ -83,13 +98,10 @@ export default function SearchBar() {
       <button
         type="submit"
         className="inline-flex items-center justify-center rounded-2xl bg-indigo-500 px-6 py-3 text-sm font-semibold uppercase tracking-wide text-white shadow-lg shadow-indigo-500/40 transition hover:-translate-y-0.5 hover:bg-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-300 disabled:cursor-not-allowed disabled:bg-white/20"
-        disabled={!term}
+        disabled={!term.trim()}
       >
         Cari
       </button>
     </form>
   );
 }
-
-
-
