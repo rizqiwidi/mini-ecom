@@ -1,4 +1,4 @@
-export type ProductDoc = {
+﻿export type ProductDoc = {
   sku: string;
   name: string;
   brand?: string;
@@ -31,6 +31,12 @@ export function scoreQuery(q: string, p: ProductDoc) {
     }
     const nameTokensMatched = tokens.filter((token) => (p.name ?? "").toLowerCase().includes(token)).length;
     score += nameTokensMatched * 4;
+    if (p.sku) {
+      const sku = p.sku.toLowerCase();
+      if (sku.includes(qn)) score += 20;
+      const condensedQuery = qn.replace(/[^a-z0-9]/g, "");
+      if (condensedQuery && sku.replace(/[^a-z0-9]/g, "").includes(condensedQuery)) score += 10;
+    }
   }
   if (p.trend === "down") score += 2;
   if (p.isOnSale) score += 3;

@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from "next/server";
+﻿import { NextRequest, NextResponse } from "next/server";
 import { join } from "node:path";
 import { readFile, stat } from "node:fs/promises";
 
@@ -109,12 +109,22 @@ function parsePayload(raw: string): ProductsPayload {
   return null;
 }
 
-function filterByTokens(items: ProductItem[], tokens: string[]) {
+function filterByTokens(items: ProductItem[], tokens: string[], rawQuery: string) {
   if (!tokens.length) return items;
   const brandTokens = tokens.filter((token) => BRAND_KEYWORDS.has(token));
+  const normalizedQuery = rawQuery.toLowerCase();
   return items.filter((item) => {
-    const haystack = `${item.name ?? ""} ${item.brand ?? ""} ${item.category ?? ""} ${item.marketplace ?? ""}`.toLowerCase();
+    const haystack = `${item.name ?? ""} ${item.brand ?? ""} ${item.category ?? ""} ${item.marketplace ?? ""} ${item.sku ?? ""}`.toLowerCase();
     if (!tokens.every((token) => haystack.includes(token))) return false;
+    if (normalizedQuery && item.sku) {
+      const skuLower = item.sku.toLowerCase();
+      if (normalizedQuery.includes("-")) {
+        const condensed = normalizedQuery.replace(/[^a-z0-9]/g, "");
+        if (!skuLower.replace(/[^a-z0-9]/g, "").includes(condensed)) return false;
+      } else if (!skuLower.includes(normalizedQuery) && normalizedQuery.length > 4) {
+        return false;
+      }
+    }
     if (brandTokens.length) {
       const brand = String(item.brand ?? "").toLowerCase();
       if (!brandTokens.some((token) => brand.includes(token))) return false;
@@ -189,7 +199,7 @@ export async function GET(req: NextRequest) {
   const data = await loadProducts();
   const items = Array.isArray(data?.items) ? (data.items as ProductItem[]) : [];
 
-  const tokenFiltered = filterByTokens(items, tokens);
+  const tokenFiltered = filterByTokens(items, tokens, q);
   const trendFiltered = applyTrendFilter(tokenFiltered, trendFilter);
   const priceFiltered = applyPriceFilter(trendFiltered, priceFilter);
   const ranked = rankProducts(q, priceFiltered as any) as ProductItem[];
@@ -209,3 +219,5 @@ export async function GET(req: NextRequest) {
     pageSize: MAX_RESULTS,
   });
 }
+
+
