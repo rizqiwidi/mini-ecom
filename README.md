@@ -2,11 +2,11 @@
 
 > Insight harga laptop Indonesia – search, compare, and watch price movements from popular marketplaces.
 
-[![Live Demo](https://img.shields.io/badge/Live-Demo-blue?style=for-the-badge)](https://mini-ecom-blush.vercel.app/) [![Dataset](https://img.shields.io/badge/Dataset-Kaggle-orange?style=for-the-badge)](https://www.kaggle.com/datasets/artakusuma/laptopecomercee/)
+**Live demo:** https://mini-ecom-blush.vercel.app/  ·  **Dataset:** https://www.kaggle.com/datasets/artakusuma/laptopecomercee/
 
 ## ? Highlights
 - **Smart search** with token heuristics; SKU, product name, and brand are easy to discover.
-- **Trend & prediction visuals**: badges for up/down/stable trend, last price change percentage, and 7-day forecast.
+- **Trend & prediction visuals**: badges for up/down/stable trend and last price change percentage.
 - **Manual submission & feedback**: users can add new products or send price corrections directly from the UI.
 - **Integrated ETL pipeline**: CSV ? normalized JSON ? automatically uploaded to Vercel Blob Storage.
 
@@ -46,7 +46,7 @@
    | GitHub Actions ? Settings ? Secrets ? Actions | `VERCEL_TOKEN` | Personal token from Vercel (required by deploy workflow). |
    | GitHub Actions | `VERCEL_ORG_ID`, `VERCEL_PROJECT_ID` | IDs from Vercel dashboard. |
    | GitHub Actions | `BLOB_READ_WRITE_TOKEN` | Same token as local `.env`, used by ETL workflow. |
-   | GitHub Actions | `BLOB_PREFIX` | Namespace for blob storage (e.g., `mini-ecom`). |
+   | GitHub Actions | `BLOB_PREFIX` | Namespace for blob storage, for example `mini-ecom`. |
    | Vercel Project Settings ? Environment Variables | `BLOB_READ_WRITE_TOKEN`, `BLOB_PREFIX`, `NEXT_PUBLIC_BASE_URL` (optional) | Mirror the same values so serverless functions have access. |
 
 4. **Run locally**
@@ -56,7 +56,7 @@
    ```
 
 5. **Process dataset (optional)**
-   - Upload Kaggle CSV to Vercel Blob key `mini-ecom/raw/laptop/...` **or** place CSV inside `data/`.
+   - Upload Kaggle CSV to Vercel Blob key `mini-ecom/raw/laptop/...` or place CSV inside `data/`.
    - Regenerate processed products locally:
      ```bash
      curl -X POST http://localhost:3000/api/etl \
@@ -85,5 +85,8 @@ public/processed/
   products.json      # Ready-to-serve aggregated products
 ```
 
+## ?? Warning
+Price information is based on a snapshot of laptop listings scraped in January 2021. Marketplace links contained in the dataset may have expired and actual prices might differ from what appears in the application.
+
 ---
-Enjoy building smarter laptop price insights! ?????
+Keep exploring and build smarter laptop price insights.
