@@ -114,7 +114,7 @@ export default async function Page({
         <div className="absolute inset-0 -z-10 bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.25),transparent_55%)]" />
         <div className="flex flex-col gap-6">
           <span className="inline-flex w-fit items-center gap-2 rounded-full bg-white/20 px-3 py-1 text-xs font-semibold uppercase tracking-wide">
-            ? Insight Harga Laptop Indonesia
+            Insight Harga Laptop Indonesia
           </span>
           <div className="grid gap-6 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)] lg:items-end">
             <div className="flex flex-col gap-4">
@@ -122,7 +122,7 @@ export default async function Page({
                 Cari laptop terbaik, pantau tren harga, dan buat keputusan beli lebih cerdas.
               </h1>
               <p className="max-w-2xl text-sm text-white/80 md:text-base">
-                Data dikurasi setiap hari dari marketplace populer. Gunakan filter tren, harga, dan urutan untuk menemukan produk yang paling relevan.
+                Anda dapat membantu kami kurasi data setiap hari dari marketplace populer. Gunakan filter tren, harga, dan urutan untuk menemukan produk yang paling relevan.
               </p>
             </div>
             <dl className="grid gap-4 rounded-3xl border border-white/10 bg-black/20 p-6 backdrop-blur-sm sm:grid-cols-3">

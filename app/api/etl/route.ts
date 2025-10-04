@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { listBlobs, uploadBlob } from "../../../lib/blob";
-import { forecastNext7, trendFlag } from "../../../lib/forecast";
+import { forecastAccuracy, forecastNext7, trendFlag } from "../../../lib/forecast";
 import {
   createAccumulator,
   addRow,
@@ -61,3 +61,5 @@ export async function POST(req: NextRequest) {
   await uploadBlob("processed/products.json", JSON.stringify({ items }));
   return NextResponse.json({ ok: true, count: items.length });
 }
+
+

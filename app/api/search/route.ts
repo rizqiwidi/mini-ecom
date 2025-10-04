@@ -1,7 +1,8 @@
-﻿import { NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { join } from "node:path";
 import { readFile, stat } from "node:fs/promises";
 
+import { readManualList } from "../../../lib/manual-dataset";
 import { rankProducts } from "../../../lib/ranking";
 
 type ProductsPayload = { items: unknown } | null;
@@ -10,6 +11,7 @@ type ProductItem = Record<string, any>;
 const LOCAL_JSON_PATH = join(process.cwd(), "public", "processed", "products.json");
 const MAX_RESULTS = 24;
 const MAX_QUERY_TOKENS = 5;
+const MANUAL_DATASET_KEY = "manual/manual-dataset.json";
 
 const STOP_WORDS = new Set([
   "dan",
@@ -23,7 +25,6 @@ const STOP_WORDS = new Set([
   "di",
   "ke",
 ]);
-
 
 let cachedData: ProductsPayload = null;
 let cachedLocalMtime: number | null = null;
@@ -104,6 +105,44 @@ function parsePayload(raw: string): ProductsPayload {
   return null;
 }
 
+async function loadManualSubmissions(): Promise<ProductItem[]> {
+  try {
+    const list = await readManualList(MANUAL_DATASET_KEY);
+    if (!Array.isArray(list)) return [];
+    return list
+      .filter((entry: any) => (entry?.type ?? "submission") === "submission")
+      .map((entry: any, index: number) => {
+        const name = typeof entry?.name === "string" && entry.name.trim() ? entry.name.trim() : "Produk manual";
+        const brand = typeof entry?.brand === "string" ? entry.brand.trim() : "";
+        const category = typeof entry?.category === "string" ? entry.category.trim() : "Manual";
+        const rawPrice = Number(entry?.price ?? NaN);
+        const price = Number.isFinite(rawPrice) && rawPrice > 0 ? rawPrice : 0;
+        const marketplace = typeof entry?.marketplace === "string" ? entry.marketplace.trim() : "Manual";
+        const base = `${entry?.timestamp ?? "manual"}-${name}`.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+        const sku = `manual-${base || index}`;
+        return {
+          sku,
+          name,
+          brand,
+          category,
+          price,
+          marketplace,
+          url: typeof entry?.url === "string" ? entry.url.trim() || undefined : undefined,
+          sold: Number.isFinite(Number(entry?.sold)) ? Number(entry.sold) : undefined,
+          trend: "flat",
+          direction: "flat",
+          changePercent: null,
+          accuracy: null,
+          forecast7: [],
+          source: "manual",
+        } as ProductItem;
+      });
+  } catch (err) {
+    console.warn("manual submissions load failed", err);
+    return [];
+  }
+}
+
 function tokenizeQuery(raw: string) {
   const normalized = raw.toLowerCase();
   const primary = normalized
@@ -118,6 +157,7 @@ function tokenizeQuery(raw: string) {
     .filter(Boolean)
     .slice(0, MAX_QUERY_TOKENS);
 }
+
 function filterByTokens(items: ProductItem[], tokens: string[], rawQuery: string) {
   if (!tokens.length) return items;
   const normalizedQuery = rawQuery.toLowerCase();
@@ -131,10 +171,14 @@ function filterByTokens(items: ProductItem[], tokens: string[], rawQuery: string
     return tokens.some((token) => haystack.includes(token));
   });
 }
+
 function applyTrendFilter(items: ProductItem[], trend: string) {
   if (!items.length || trend === "all") return items;
   const normalized = trend.toLowerCase();
-  return items.filter((item) => (item.trend ?? "").toLowerCase() === normalized);
+  return items.filter((item) => {
+    const current = (item.direction ?? item.trend ?? "").toLowerCase();
+    return current === normalized;
+  });
 }
 
 function applyPriceFilter(items: ProductItem[], filter: string) {
@@ -194,8 +238,10 @@ export async function GET(req: NextRequest) {
 
   const data = await loadProducts();
   const items = Array.isArray(data?.items) ? (data.items as ProductItem[]) : [];
+  const manualSubmissions = await loadManualSubmissions();
+  const combinedItems = [...items, ...manualSubmissions];
 
-  const tokenFiltered = filterByTokens(items, tokens, q);
+  const tokenFiltered = filterByTokens(combinedItems, tokens, q);
   const trendFiltered = applyTrendFilter(tokenFiltered, trendFilter);
   const priceFiltered = applyPriceFilter(trendFiltered, priceFilter);
   const ranked = rankProducts(q, priceFiltered as any) as ProductItem[];
@@ -215,8 +261,3 @@ export async function GET(req: NextRequest) {
     pageSize: MAX_RESULTS,
   });
 }
-
-
-
-
-

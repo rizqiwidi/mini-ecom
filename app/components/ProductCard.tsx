@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { FormEvent, useMemo, useState } from "react";
 
@@ -12,10 +12,13 @@ type ProductCardProps = {
     category?: string;
     price?: number;
     trend?: "up" | "down" | "flat";
+    direction?: "up" | "down" | "flat";
     forecast7?: number[];
     marketplace?: string;
     url?: string;
     sold?: number;
+    accuracy?: number | null;
+    changePercent?: number | null;
   };
 };
 
@@ -40,10 +43,11 @@ const LABEL_BY_TREND: Record<string, string> = {
 const currency = new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", maximumFractionDigits: 0 });
 
 export default function ProductCard({ p }: ProductCardProps) {
-  const trend = typeof p.trend === "string" ? p.trend : "flat";
-  const arrow = ARROW_BY_TREND[trend] ?? ARROW_BY_TREND.flat;
-  const badge = BADGE_BY_TREND[trend] ?? BADGE_BY_TREND.flat;
-  const trendLabel = LABEL_BY_TREND[trend] ?? LABEL_BY_TREND.flat;
+  const rawTrend = typeof p.trend === "string" ? p.trend : "flat";
+  const direction = typeof p.direction === "string" ? p.direction : rawTrend;
+  const arrow = ARROW_BY_TREND[direction] ?? ARROW_BY_TREND.flat;
+  const badge = BADGE_BY_TREND[direction] ?? BADGE_BY_TREND.flat;
+  const trendLabel = LABEL_BY_TREND[direction] ?? LABEL_BY_TREND.flat;
   const next = Array.isArray(p.forecast7) && p.forecast7.length ? p.forecast7[0] : null;
   const soldLabel = useMemo(() => {
     if (typeof p.sold === "number" && p.sold >= 0) {
@@ -53,6 +57,14 @@ export default function ProductCard({ p }: ProductCardProps) {
   }, [p.sold]);
   const marketplace = p.marketplace?.trim() ?? "";
   const marketplaceLabel = marketplace ? `Lihat di ${marketplace}` : "Buka Tautan";
+  const accuracyValue =
+    typeof p.accuracy === "number" && Number.isFinite(p.accuracy)
+      ? Math.max(0, Math.min(100, p.accuracy))
+      : null;
+  const changePercent =
+    typeof p.changePercent === "number" && Number.isFinite(p.changePercent)
+      ? Math.round(p.changePercent * 10) / 10
+      : null;
 
   const [showForm, setShowForm] = useState(false);
   const [displayPrice, setDisplayPrice] = useState(Number(p.price ?? 0));
@@ -127,12 +139,22 @@ export default function ProductCard({ p }: ProductCardProps) {
       <div className="flex flex-col gap-3">
         <div>
           <div className="text-lg font-semibold leading-snug line-clamp-2">{p.name ?? "Tanpa nama"}</div>
-          <div className="text-xs uppercase tracking-wide text-white/60">{p.brand || "-"} · {p.category || "-"}</div>
+          <div className="text-xs uppercase tracking-wide text-white/60">{p.brand || "-"} | {p.category || "-"}</div>
         </div>
         <div className="flex items-center justify-between gap-3">
           <div>
             <div className="text-2xl font-bold">{currency.format(displayPrice)}</div>
             {soldLabel && <div className="text-xs text-white/60">{soldLabel}</div>}
+            {accuracyValue !== null && (
+              <div className="text-xs text-white/60">
+                Akurasi forecast: <span className="font-semibold text-white">{accuracyValue.toFixed(1)}%</span>
+              </div>
+            )}
+            {changePercent !== null && (
+              <div className="text-xs text-white/60">
+                Perubahan terbaru: <span className="font-semibold text-white">{changePercent > 0 ? "+" : ""}{changePercent.toFixed(1)}%</span>
+              </div>
+            )}
           </div>
           <span className={`inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-semibold ${badge}`}>
             {arrow} {trendLabel}
@@ -223,10 +245,6 @@ function formatRupiah(digits: string) {
   if (!Number.isFinite(number)) return digits;
   return new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", maximumFractionDigits: 0 }).format(number);
 }
-
-
-
-
 
 
 

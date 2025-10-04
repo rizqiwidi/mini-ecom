@@ -1,4 +1,4 @@
-﻿export type ProductDoc = {
+export type ProductDoc = {
   sku: string;
   name: string;
   brand?: string;
@@ -6,6 +6,8 @@
   price: number;
   forecast7?: number[];
   trend?: "up" | "down" | "flat";
+  direction?: "up" | "down" | "flat";
+  changePercent?: number | null;
   isOnSale?: boolean;
   marketplace?: string;
   url?: string;
@@ -38,7 +40,9 @@ export function scoreQuery(q: string, p: ProductDoc) {
       if (condensedQuery && sku.replace(/[^a-z0-9]/g, "").includes(condensedQuery)) score += 10;
     }
   }
-  if (p.trend === "down") score += 2;
+  const priceDirection = p.direction ?? p.trend;
+  if (priceDirection === "down") score += 2;
+  if (priceDirection === "up") score -= 1;
   if (p.isOnSale) score += 3;
   if (typeof p.sold === "number" && p.sold > 0) {
     score += Math.min(6, Math.log10(p.sold + 1) * 2);
