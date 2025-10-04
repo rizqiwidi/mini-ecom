@@ -1,16 +1,17 @@
-# ?? Mini E-com Laptop Indonesia
+#  Mini E-com Laptop Indonesia
 
-> Insight harga laptop Indonesia – search, compare, and watch price movements from popular marketplaces.
+> Mini E-com Laptop Indonesia is a curated pricing intelligence project that aggregates historical laptop listings from Indonesiaâ€™s major marketplaces, normalizes the data through an ETL pipeline, and serves an interactive search experience complete with trend tracking, 7â€‘day forecasts, and community-driven price updates for smarter purchasing decisions.
 
-**Live demo:** https://mini-ecom-blush.vercel.app/  ·  **Dataset:** https://www.kaggle.com/datasets/artakusuma/laptopecomercee/
+**Live demo:** https://mini-ecom-blush.vercel.app/
+**Dataset:** https://www.kaggle.com/datasets/artakusuma/laptopecomercee/
 
-## ? Highlights
+##  Highlights
 - **Smart search** with token heuristics; SKU, product name, and brand are easy to discover.
 - **Trend & prediction visuals**: badges for up/down/stable trend and last price change percentage.
 - **Manual submission & feedback**: users can add new products or send price corrections directly from the UI.
-- **Integrated ETL pipeline**: CSV ? normalized JSON ? automatically uploaded to Vercel Blob Storage.
+- **Integrated ETL pipeline**: CSV, normalized JSON, automatically uploaded to Vercel Blob Storage.
 
-## ?? Tech Stack
+##  Tech Stack
 | Layer | Tools |
 |-------|-------|
 | Frontend UI | Next.js (App Router), React 18, Tailwind CSS |
@@ -19,16 +20,16 @@
 | Storage | Vercel Blob (raw CSV + processed JSON) |
 | Styling | Tailwind CSS, custom design system |
 
-## ?? Features
-- ?? **Search & filter**: multi-token keyword search, trend filter, price range, and sorting.
-- ?? **Forecast & trend**: direction badge (up/down/stable), latest price change, 7-day forecast values.
-- ?? **Manual dataset**: form-driven submission to extend the dataset without waiting for new ETL runs.
-- ?? **ETL endpoint** (`POST /api/etl`): regenerates `processed/products.json` from CSV stored in Vercel Blob.
+##  Features
+-  **Search & filter**: multi-token keyword search, trend filter, price range, and sorting.
+-  **Forecast & trend**: direction badge (up/down/stable), latest price change, 7-day forecast values.
+-  **Manual dataset**: form-driven submission to extend the dataset without waiting for new ETL runs.
+-  **ETL endpoint** (`POST /api/etl`): regenerates `processed/products.json` from CSV stored in Vercel Blob.
 
-## ??? Setup Instructions
+##  Setup Instructions
 1. **Clone & install**
    ```bash
-   git clone https://github.com/<your-username>/mini-ecom.git
+   git clone https://github.com/rizqiwidi/mini-ecom.git
    cd mini-ecom
    npm install
    ```
@@ -43,11 +44,11 @@
 3. **Secret configuration (GitHub Actions / Vercel)**
    | Scope | Key | Description |
    |-------|-----|-------------|
-   | GitHub Actions ? Settings ? Secrets ? Actions | `VERCEL_TOKEN` | Personal token from Vercel (required by deploy workflow). |
+   | GitHub Actions Settings Secrets Actions | `VERCEL_TOKEN` | Personal token from Vercel (required by deploy workflow). |
    | GitHub Actions | `VERCEL_ORG_ID`, `VERCEL_PROJECT_ID` | IDs from Vercel dashboard. |
    | GitHub Actions | `BLOB_READ_WRITE_TOKEN` | Same token as local `.env`, used by ETL workflow. |
    | GitHub Actions | `BLOB_PREFIX` | Namespace for blob storage, for example `mini-ecom`. |
-   | Vercel Project Settings ? Environment Variables | `BLOB_READ_WRITE_TOKEN`, `BLOB_PREFIX`, `NEXT_PUBLIC_BASE_URL` (optional) | Mirror the same values so serverless functions have access. |
+   | Vercel Project Settings Environment Variables | `BLOB_READ_WRITE_TOKEN`, `BLOB_PREFIX`, `NEXT_PUBLIC_BASE_URL` (optional) | Mirror the same values so serverless functions have access. |
 
 4. **Run locally**
    ```bash
