@@ -44,7 +44,7 @@ export function forecastNextValue(values: number[]) {
 }
 
 export function forecastAccuracy(values: number[]): number | null {
-  if (!Array.isArray(values) || values.length < 4) return null;
+  if (!Array.isArray(values) || values.length < 3) return null;
   const n = values.length;
   const horizon = Math.min(7, n - 1);
   let apeSum = 0;

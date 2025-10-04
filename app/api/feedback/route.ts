@@ -1,4 +1,4 @@
-﻿import { NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 
 import { appendManualEntry } from "../../../lib/manual-dataset";
 
@@ -71,4 +71,5 @@ export async function POST(req: NextRequest) {
 function normalizeString(value: unknown) {
   return typeof value === "string" ? value.trim() : "";
 }
+
 
