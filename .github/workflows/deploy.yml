@@ -4,6 +4,8 @@ on:
   push:
     branches: [ "main" ]
   workflow_dispatch:
+  schedule:
+    - cron: "0 0 * * *"
 
 jobs:
   build-deploy:
@@ -42,3 +44,4 @@ jobs:
         if: ${{ env.BLOB_READ_WRITE_TOKEN != '' }}
         run: |
           curl -X POST "https://${{ env.VERCEL_PROJECT_DOMAIN }}/api/etl" -H "x-cron-token: $BLOB_READ_WRITE_TOKEN"
+
