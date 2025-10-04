@@ -4,14 +4,14 @@ export type ProductDoc = {
   brand?: string;
   category?: string;
   price: number;
-  forecast7?: number[];
   trend?: "up" | "down" | "flat";
   direction?: "up" | "down" | "flat";
-  changePercent?: number | null;
+  forecast7?: number[];
   isOnSale?: boolean;
   marketplace?: string;
   url?: string;
   sold?: number;
+  changePercent?: number | null;
 };
 
 export function scoreQuery(q: string, p: ProductDoc) {

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { listBlobs, uploadBlob } from "../../../lib/blob";
-import { forecastAccuracy, forecastNext7, trendFlag } from "../../../lib/forecast";
+import { forecastNext7, trendFlag } from "../../../lib/forecast";
 import {
   createAccumulator,
   addRow,
@@ -51,16 +51,27 @@ export async function POST(req: NextRequest) {
   }
 
   const aggregates = finalizeProducts(acc);
-  const items = aggregates.map(({ meta, priceSeries, latestPrice }) => ({
-    ...meta,
-    price: latestPrice,
-    trend: trendFlag(priceSeries),
-    forecast7: forecastNext7(priceSeries),
-  }));
+  const items = aggregates.map(({ meta, priceSeries, latestPrice }) => {
+    const previousPrice = priceSeries.length > 1 ? priceSeries[priceSeries.length - 2] : priceSeries[priceSeries.length - 1];
+    let direction: "up" | "down" | "flat" = trendFlag(priceSeries);
+    let changePercent: number | null = null;
+    if (Number.isFinite(previousPrice) && Number.isFinite(latestPrice) && Number(previousPrice) > 0) {
+      const delta = ((latestPrice - previousPrice) / Number(previousPrice)) * 100;
+      changePercent = Number(delta.toFixed(1));
+      if (delta > 0.5) direction = "up";
+      else if (delta < -0.5) direction = "down";
+      else direction = "flat";
+    }
+    return {
+      ...meta,
+      price: latestPrice,
+      trend: trendFlag(priceSeries),
+      direction,
+      changePercent,
+      forecast7: forecastNext7(priceSeries),
+    };
+  });
 
   await uploadBlob("processed/products.json", JSON.stringify({ items }));
   return NextResponse.json({ ok: true, count: items.length });
 }
-
-
-
