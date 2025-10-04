@@ -1,0 +1,1 @@
+Place your Kaggle CSV here as laptops.csv (e.g., data/laptops.csv).

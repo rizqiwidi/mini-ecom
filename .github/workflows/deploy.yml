@@ -1,0 +1,45 @@
+name: CI + Deploy (Vercel + Blob)
+
+on:
+  push:
+    branches: [ "main" ]
+  workflow_dispatch:
+
+jobs:
+  build-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install deps
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+        env:
+          NEXT_PUBLIC_BASE_URL: ${{ secrets.NEXT_PUBLIC_BASE_URL }}
+
+      - name: Deploy to Vercel (Production)
+        run: |
+          npm i -g vercel@latest
+          vercel pull --yes --token=${{ secrets.VERCEL_TOKEN }} --environment=production
+          vercel build --prod --token=${{ secrets.VERCEL_TOKEN }}
+          vercel deploy --prebuilt --prod --token=${{ secrets.VERCEL_TOKEN }}
+        env:
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+
+      - name: (Optional) Trigger ETL on Production
+        if: ${{ secrets.BLOB_READ_WRITE_TOKEN != '' }}
+        run: |
+          curl -X POST "https://$VERCEL_PROJECT_DOMAIN/api/etl"             -H "x-cron-token: $BLOB_READ_WRITE_TOKEN"
+        env:
+          BLOB_READ_WRITE_TOKEN: ${{ secrets.BLOB_READ_WRITE_TOKEN }}
+          VERCEL_PROJECT_DOMAIN: ${{ secrets.VERCEL_PROJECT_DOMAIN }}
