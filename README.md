@@ -143,7 +143,7 @@ public/processed/
 This documentation uses IBM Granite AI assistance in the coding process via the Replicate web interface—using the attached prompt—to generate TypeScript reference code as scaffolding for the project’s forecasting module; the AI output was reviewed, adapted, and integrated into lib/forecast.ts (EWMA with configurable alpha, least-squares linear trend returning slope, 7-day forecast combining EWMA+slope with non-negative constraints, and “up”/“down”/“flat” trend labeling powering UI badges and price-change displays), and is provided strictly as reference scaffolding that must undergo code review, customization, and testing before production use.
 
 ## Warning
-Price information derives from laptop listings scraped in 2020-2021. Marketplace links may have expired, and real-world prices can deviate from the historical data.
+Price information derives from laptop listings scraped in 2020–2021. Marketplace links may have expired, and real-world prices can deviate from the historical data. For security reasons, updating and adding new data is restricted and can only be performed by administrators to prevent misuse.
 
 ---
 Keep exploring and build smarter laptop price insights.
