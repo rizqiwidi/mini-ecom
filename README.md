@@ -2,7 +2,10 @@
 
 > Mini E-com Laptop Indonesia is a curated pricing intelligence project that aggregates historical laptop listings from Indonesia's major marketplaces, normalizes the data through an ETL pipeline, and serves an interactive search experience complete with trend tracking, 7-day forecasts, and community-driven price updates for smarter purchasing decisions.
 
+![DEMO](assets/demo.png)
+
 Live demo: https://mini-ecom-blush.vercel.app/
+
 Dataset: https://www.kaggle.com/datasets/artakusuma/laptopecomerce/
 
 ## Highlights
@@ -134,6 +137,9 @@ public/processed/
   products.json      # Ready-to-serve aggregated products
 ```
 ## AI Support Explanation
+
+![AI Support](assets/ai_support.png)
+
 This documentation leverages AI-assisted coding via the Replicate web interface—using the attached prompt—to generate TypeScript reference code as scaffolding for the project’s forecasting module; the AI output was reviewed, adapted, and integrated into lib/forecast.ts (EWMA with configurable alpha, least-squares linear trend returning slope, 7-day forecast combining EWMA+slope with non-negative constraints, and “up”/“down”/“flat” trend labeling powering UI badges and price-change displays), and is provided strictly as reference scaffolding that must undergo code review, customization, and testing before production use.
 
 ## Warning
