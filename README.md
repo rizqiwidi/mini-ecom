@@ -4,9 +4,9 @@
 
 ![DEMO](assets/demo.png)
 
-Live demo: https://mini-ecom-blush.vercel.app/
+<a href="https://mini-ecom-blush.vercel.app/" target="_blank"> <img src="https://img.shields.io/badge/Live%20Demo-Open%20App-blue?style=for-the-badge&logo=vercel" alt="Live Demo"/> </a>
 
-Dataset: https://www.kaggle.com/datasets/artakusuma/laptopecomerce/
+<a href="https://www.kaggle.com/datasets/artakusuma/laptopecomerce/" target="_blank"> <img src="https://img.shields.io/badge/Kaggle-Laptop%20E--Commerce%20Dataset-orange?style=for-the-badge&logo=kaggle" alt="Kaggle Dataset"/> </a>
 
 ## Highlights
 - Smart search with token heuristics so SKU, product name, and brand remain easy to discover.
