@@ -54,6 +54,7 @@ export async function POST(req: NextRequest) {
     type: "price-update",
     timestamp: entry.timestamp,
     sku: entry.sku,
+    productName: entry.productName ?? null,
     newPrice: entry.newPrice,
     previousPrice: entry.previousPrice ?? null,
     marketplace: entry.marketplace ?? null,

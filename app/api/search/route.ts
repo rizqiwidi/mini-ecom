@@ -13,6 +13,7 @@ const LOCAL_JSON_PATH = join(process.cwd(), "public", "processed", "products.jso
 const MAX_RESULTS = 24;
 const MAX_QUERY_TOKENS = 5;
 const MANUAL_DATASET_KEY = "manual/manual-dataset.json";
+const PRICE_FEEDBACK_KEY = "manual/price-feedback.json";
 
 const STOP_WORDS = new Set([
   "dan",
@@ -100,6 +101,89 @@ async function fetchJson(url: string): Promise<ProductsPayload> {
   } catch {
     return null;
   }
+}
+
+function mapPriceUpdateEntry(entry: any, index: number, source: string): ProductItem | null {
+  const rawSku = typeof entry?.sku === "string" ? entry.sku.trim() : "";
+  const sku = rawSku || `${source}-` + (index + 1);
+  if (!sku) return null;
+
+  const rawName = typeof entry?.productName === "string" ? entry.productName.trim() : "";
+  const name = rawName || `Catatan harga ${sku}`;
+  const rawMarketplace = typeof entry?.marketplace === "string" ? entry.marketplace.trim() : "";
+  const marketplace = rawMarketplace || "Manual";
+  const rawUrl = typeof entry?.url === "string" ? entry.url.trim() : "";
+  const rawNote = typeof entry?.note === "string" ? entry.note.trim() : "";
+  const timestamp = typeof entry?.timestamp === "string" ? entry.timestamp : undefined;
+
+  const newPrice = Number(entry?.newPrice ?? entry?.price ?? NaN);
+  const previousPrice = Number(entry?.previousPrice ?? NaN);
+
+  const price = Number.isFinite(newPrice) && newPrice > 0 ? newPrice : 0;
+  const previous = Number.isFinite(previousPrice) && previousPrice > 0 ? previousPrice : undefined;
+
+  return {
+    sku,
+    name,
+    brand: "Feedback",
+    category: "Manual Update",
+    marketplace,
+    url: rawUrl || undefined,
+    price,
+    previousPrice: previous,
+    note: rawNote || undefined,
+    timestamp,
+    source,
+  } as ProductItem;
+}
+
+async function loadPriceFeedbackItems(): Promise<ProductItem[]> {
+  const list = await readManualList(PRICE_FEEDBACK_KEY);
+  if (!Array.isArray(list)) return [];
+  const mapped = list
+    .map((entry, index) => mapPriceUpdateEntry(entry, index, "price-feedback"))
+    .filter((item): item is ProductItem => !!item);
+  return mapped;
+}
+
+async function loadManualPriceUpdates(): Promise<ProductItem[]> {
+  const list = await readManualList(MANUAL_DATASET_KEY);
+  if (!Array.isArray(list)) return [];
+  const mapped = list
+    .map((entry, index) => {
+      if ((entry?.type ?? "submission") !== "price-update") return null;
+      return mapPriceUpdateEntry(entry, index, "manual-price-update");
+    })
+    .filter((item): item is ProductItem => !!item);
+  return mapped;
+}
+
+function dedupeByKey(items: ProductItem[]): ProductItem[] {
+  const seen = new Set<string>();
+  const result: ProductItem[] = [];
+  for (const item of items) {
+    const key = `${item.sku}::${item.timestamp ?? item.price ?? ""}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    result.push(item);
+  }
+  return result;
+}
+
+function buildResults(
+  items: ProductItem[],
+  tokens: string[],
+  rawQuery: string,
+  trendFilter: string,
+  priceFilter: string,
+  sortMode: string
+) {
+  const withDirection = items.map(withComputedDirection);
+  const tokenFiltered = filterByTokens(withDirection, tokens, rawQuery);
+  const trendFiltered = applyTrendFilter(tokenFiltered, trendFilter);
+  const priceFiltered = applyPriceFilter(trendFiltered, priceFilter);
+  const ranked = rankProducts(rawQuery, priceFiltered as any) as ProductItem[];
+  return applySorting(ranked, sortMode);
 }
 
 function parsePayload(raw: string): ProductsPayload {
@@ -266,19 +350,25 @@ export async function GET(req: NextRequest) {
   const data = await loadProducts();
   const items = Array.isArray(data?.items) ? (data.items as ProductItem[]) : [];
   const manualSubmissions = await loadManualSubmissions();
-  const combinedItems = [...items, ...manualSubmissions].map(withComputedDirection);
+  const baseItems = [...items, ...manualSubmissions];
+  let processed = buildResults(baseItems, tokens, q, trendFilter, priceFilter, sortMode);
 
-  const tokenFiltered = filterByTokens(combinedItems, tokens, q);
-  const trendFiltered = applyTrendFilter(tokenFiltered, trendFilter);
-  const priceFiltered = applyPriceFilter(trendFiltered, priceFilter);
-  const ranked = rankProducts(q, priceFiltered as any) as ProductItem[];
-  const sorted = applySorting(ranked, sortMode);
+  if (!processed.length) {
+    const [feedbackItems, manualUpdates] = await Promise.all([
+      loadPriceFeedbackItems(),
+      loadManualPriceUpdates(),
+    ]);
+    const fallbackItems = dedupeByKey([...feedbackItems, ...manualUpdates]);
+    if (fallbackItems.length) {
+      processed = buildResults(fallbackItems, tokens, q, trendFilter, priceFilter, sortMode);
+    }
+  }
 
-  const totalItems = sorted.length;
+  const totalItems = processed.length;
   const totalPages = Math.max(1, Math.ceil(totalItems / MAX_RESULTS));
   const currentPage = Math.min(page, totalPages);
   const start = (currentPage - 1) * MAX_RESULTS;
-  const paged = sorted.slice(start, start + MAX_RESULTS);
+  const paged = processed.slice(start, start + MAX_RESULTS);
 
   return NextResponse.json({
     items: paged,

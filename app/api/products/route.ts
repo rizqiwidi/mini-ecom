@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 
-import { appendManualEntry, readManualList } from "../../../lib/manual-dataset";
+import { readManualList, writeManualList } from "../../../lib/manual-dataset";
 
 const DATASET_KEY = "manual/manual-dataset.json";
-const RATE_LIMIT_WINDOW_MS = 120_000;
+const RATE_LIMIT_WINDOW_MS = 60_000;
+let lastSubmissionTimestamp: number | null = null;
 
 type SubmissionEntry = {
   id: string;
@@ -68,6 +69,19 @@ export async function POST(req: NextRequest) {
     url: entry.url ?? null,
   };
 
+  const now = Date.now();
+  if (lastSubmissionTimestamp && now - lastSubmissionTimestamp < RATE_LIMIT_WINDOW_MS) {
+    const retryAfter = Math.ceil((RATE_LIMIT_WINDOW_MS - (now - lastSubmissionTimestamp)) / 1000);
+    return NextResponse.json(
+      {
+        ok: false,
+        message: "Pengajuan produk terakhir baru saja diterima. Coba lagi setelah beberapa saat.",
+        retryAfter,
+      },
+      { status: 429 }
+    );
+  }
+
   const existingDataset = await readManualList(DATASET_KEY);
   const lastSubmission = [...existingDataset]
     .reverse()
@@ -75,8 +89,8 @@ export async function POST(req: NextRequest) {
 
   if (lastSubmission) {
     const lastTime = Date.parse(lastSubmission.timestamp as string);
-    if (!Number.isNaN(lastTime) && Date.now() - lastTime < RATE_LIMIT_WINDOW_MS) {
-      const retryAfter = Math.ceil((RATE_LIMIT_WINDOW_MS - (Date.now() - lastTime)) / 1000);
+    if (!Number.isNaN(lastTime) && now - lastTime < RATE_LIMIT_WINDOW_MS) {
+      const retryAfter = Math.ceil((RATE_LIMIT_WINDOW_MS - (now - lastTime)) / 1000);
       return NextResponse.json(
         {
           ok: false,
@@ -88,7 +102,9 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  await appendManualEntry(DATASET_KEY, datasetRecord);
+  existingDataset.push(datasetRecord);
+  await writeManualList(DATASET_KEY, existingDataset);
+  lastSubmissionTimestamp = now;
 
   const message = "Data produk baru berhasil ditambahkan ke database manual.";
 
