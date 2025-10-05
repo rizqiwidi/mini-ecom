@@ -39,7 +39,7 @@ Dataset: https://www.kaggle.com/datasets/artakusuma/laptopecomerce/
 
 ### 1. Clone and install
 ```bash
-git clone https://github.com/<your-username>/mini-ecom.git
+git clone https://github.com/rizqiwidi/mini-ecom.git
 cd mini-ecom
 npm install
 ```
