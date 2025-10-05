@@ -4,6 +4,7 @@ import { readFile, stat } from "node:fs/promises";
 
 import { readManualList } from "../../../lib/manual-dataset";
 import { rankProducts } from "../../../lib/ranking";
+import { getBlobUrl } from "../../../lib/blob";
 
 type ProductsPayload = { items: unknown } | null;
 type ProductItem = Record<string, any>;
@@ -64,10 +65,16 @@ async function loadFromLocalFile(): Promise<ProductsPayload> {
 }
 
 async function loadFromRemote(): Promise<ProductsPayload> {
+  const directUrl = await getBlobUrl("processed/products.json");
+  if (directUrl) {
+    const blob = await fetchJson(directUrl);
+    if (blob) return blob;
+  }
+
   const prefix = process.env.BLOB_PREFIX || "mini-ecom";
-  const blobUrl = `https://blob.vercel-storage.com/${prefix}/processed/products.json`;
-  const blob = await fetchJson(blobUrl);
-  if (blob) return blob;
+  const fallbackUrl = `https://blob.vercel-storage.com/${prefix}/processed/products.json`;
+  const fallbackBlob = await fetchJson(fallbackUrl);
+  if (fallbackBlob) return fallbackBlob;
 
   const base = resolveBaseUrl();
   if (!base) return null;
@@ -156,21 +163,27 @@ function tokenizeQuery(raw: string) {
 }
 
 function withComputedDirection(item: ProductItem) {
-  const price = Number(item.price ?? NaN);
-  const forecast = Array.isArray(item.forecast7) && item.forecast7.length ? Number(item.forecast7[0]) : NaN;
+  const rawPrice = Number(item.price ?? NaN);
+  const price = Number.isFinite(rawPrice) && rawPrice > 0 ? rawPrice : NaN;
+  const forecastSeries = Array.isArray(item.forecast7)
+    ? item.forecast7.map((value: any) => Number(value)).filter((value) => Number.isFinite(value))
+    : [];
+  const forecast = forecastSeries.length ? forecastSeries[0]! : NaN;
   let direction: "up" | "down" | "flat" = "flat";
   const fallback = typeof item.trend === "string" && ["up", "down", "flat"].includes(item.trend)
     ? (item.trend as "up" | "down" | "flat")
     : "flat";
   direction = fallback;
-  const tolerance = 1; // IDR
   if (Number.isFinite(price) && Number.isFinite(forecast)) {
-    if (price > forecast + tolerance) direction = "down";
-    else if (price + tolerance < forecast) direction = "up";
+    const dynamicTolerance = Math.max(1, Math.round((price as number) * 0.001));
+    const diff = (forecast as number) - (price as number);
+    if (diff > dynamicTolerance) direction = "up";
+    else if (diff < -dynamicTolerance) direction = "down";
     else direction = "flat";
   }
   return { ...item, direction };
 }
+
 
 function filterByTokens(items: ProductItem[], tokens: string[], rawQuery: string) {
   if (!tokens.length) return items;

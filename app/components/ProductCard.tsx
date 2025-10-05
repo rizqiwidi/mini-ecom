@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 
 import { useToast } from "./ToastProvider";
 
@@ -37,28 +37,46 @@ const LABEL_BY_TREND: Record<string, string> = {
   flat: "tren stabil",
 };
 
+const MIN_FEEDBACK_PRICE = 1_000;
 const currency = new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", maximumFractionDigits: 0 });
 
 export default function ProductCard({ p }: ProductCardProps) {
-  const fallbackTrend = typeof p.trend === "string" ? p.trend : "flat";
-  const forecastNext = Array.isArray(p.forecast7) && p.forecast7.length ? Number(p.forecast7[0]) : null;
-  const latestPrice = Number(p.price ?? NaN);
-  const tolerance = 1; // minimal difference in IDR to avoid oscillation
+  const normalizedTrend = typeof p.trend === "string" ? p.trend.trim().toLowerCase() : "";
+  const fallbackTrend: "up" | "down" | "flat" =
+    normalizedTrend === "up" || normalizedTrend === "down" || normalizedTrend === "flat"
+      ? (normalizedTrend as "up" | "down" | "flat")
+      : "flat";
+
+  const forecastSeries = useMemo(() => {
+    if (!Array.isArray(p.forecast7)) return [] as number[];
+    return p.forecast7
+      .map((value) => Number(value))
+      .filter((value) => Number.isFinite(value));
+  }, [p.forecast7]);
+  const forecastNext = forecastSeries.length ? forecastSeries.at(0)! : null;
+
+  const rawPrice = Number(p.price);
+  const hasValidPrice = Number.isFinite(rawPrice) && rawPrice > 0;
+  const latestPrice = hasValidPrice ? rawPrice : null;
+
   const derivedDirection = useMemo(() => {
-    if (Number.isFinite(latestPrice) && Number.isFinite(forecastNext)) {
-      if (latestPrice > (forecastNext as number) + tolerance) return "down" as const;
-      if (latestPrice + tolerance < (forecastNext as number)) return "up" as const;
+    if (latestPrice !== null && forecastNext !== null) {
+      const dynamicTolerance = Math.max(1, Math.round(latestPrice * 0.001));
+      const difference = forecastNext - latestPrice;
+      if (difference > dynamicTolerance) return "up" as const;
+      if (difference < -dynamicTolerance) return "down" as const;
       return "flat" as const;
     }
     return fallbackTrend;
   }, [fallbackTrend, forecastNext, latestPrice]);
 
-  const direction = derivedDirection;
+  const direction: "up" | "down" | "flat" = derivedDirection;
   const arrow = ARROW_BY_TREND[direction] ?? ARROW_BY_TREND.flat;
   const badge = BADGE_BY_TREND[direction] ?? BADGE_BY_TREND.flat;
   const trendLabel = LABEL_BY_TREND[direction] ?? LABEL_BY_TREND.flat;
 
-  const next = forecastNext;
+  const nextForecastLabel = forecastNext !== null ? currency.format(Math.round(forecastNext)) : null;
+
   const soldLabel = useMemo(() => {
     if (typeof p.sold === "number" && p.sold >= 0) {
       return `Terjual ${p.sold.toLocaleString("id-ID")}`;
@@ -69,12 +87,18 @@ export default function ProductCard({ p }: ProductCardProps) {
   const marketplaceLabel = marketplace ? `Lihat di ${marketplace}` : "Buka Tautan";
 
   const [showForm, setShowForm] = useState(false);
-  const [displayPrice, setDisplayPrice] = useState(Number(p.price ?? 0));
+  const [displayPrice, setDisplayPrice] = useState<number | null>(latestPrice);
   const [newPriceDigits, setNewPriceDigits] = useState("");
   const [note, setNote] = useState("");
   const [status, setStatus] = useState<"idle" | "loading" | "success" | "error">("idle");
   const [message, setMessage] = useState<string | null>(null);
   const { push } = useToast();
+
+  useEffect(() => {
+    if (!showForm) {
+      setDisplayPrice(latestPrice);
+    }
+  }, [latestPrice, showForm]);
 
   const formattedInputPrice = formatRupiah(newPriceDigits);
 
@@ -89,9 +113,9 @@ export default function ProductCard({ p }: ProductCardProps) {
     setStatus("loading");
     setMessage(null);
 
-    const priceValue = Number(newPriceDigits || 0);
-    if (!Number.isFinite(priceValue) || priceValue <= 0) {
-      showFeedbackError("Harga baru harus berupa angka positif.");
+    const priceValue = Number(newPriceDigits);
+    if (!Number.isFinite(priceValue) || priceValue < MIN_FEEDBACK_PRICE) {
+      showFeedbackError(`Harga baru minimal ${currency.format(MIN_FEEDBACK_PRICE)}.`);
       return;
     }
 
@@ -145,16 +169,16 @@ export default function ProductCard({ p }: ProductCardProps) {
         </div>
         <div className="flex items-center justify-between gap-3">
           <div>
-            <div className="text-2xl font-bold">{currency.format(displayPrice)}</div>
+            <div className="text-2xl font-bold">{displayPrice !== null ? currency.format(displayPrice) : "Harga tidak tersedia"}</div>
             {soldLabel && <div className="text-xs text-white/60">{soldLabel}</div>}
           </div>
           <span className={`inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-semibold ${badge}`}>
             {arrow} {trendLabel}
           </span>
         </div>
-        {Number.isFinite(next) && (
+        {nextForecastLabel && (
           <div className="rounded-2xl border border-white/10 bg-white/10 px-3 py-2 text-xs text-white/80">
-            Prediksi harga besok: <span className="font-semibold text-white">{currency.format(Math.round(next as number))}</span>
+            Prediksi harga besok: <span className="font-semibold text-white">{nextForecastLabel}</span>
           </div>
         )}
         {p.url && (
@@ -217,7 +241,7 @@ export default function ProductCard({ p }: ProductCardProps) {
             >
               {status === "loading" ? "Mengirim..." : "Kirim"}
             </button>
-            {message && (
+            {message && showForm && (
               <span className={`text-xs ${status === "error" ? "text-rose-300" : "text-emerald-300"}`} aria-live="polite">
                 {message}
               </span>
