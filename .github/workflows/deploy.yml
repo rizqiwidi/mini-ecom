@@ -3,6 +3,9 @@ name: CI + Deploy (Vercel + Blob)
 on:
   push:
     branches: [ "main" ]
+    paths-ignore:
+      - "**.md"
+      - ".github/**"
   workflow_dispatch:
   schedule:
     - cron: "0 0 * * *"
@@ -17,6 +20,14 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Skip if no code change (for schedule)
+        if: ${{ github.event_name == 'schedule' }}
+        run: |
+          if ! git log --since="1 day ago" | grep .; then
+            echo "No commits in last 24h — skipping deploy."
+            exit 0
+          fi
 
       - name: Setup Node
         uses: actions/setup-node@v4
