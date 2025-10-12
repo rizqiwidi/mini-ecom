@@ -10,49 +10,128 @@ on:
   schedule:
     - cron: "0 0 * * *"
 
+concurrency:
+  group: deploy-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
 jobs:
   build-deploy:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     env:
-      BLOB_READ_WRITE_TOKEN: ${{ secrets.BLOB_READ_WRITE_TOKEN }}
-      VERCEL_PROJECT_DOMAIN: ${{ secrets.VERCEL_PROJECT_DOMAIN }}
       NEXT_PUBLIC_BASE_URL: ${{ secrets.NEXT_PUBLIC_BASE_URL }}
+      VERCEL_PROJECT_DOMAIN: ${{ secrets.VERCEL_PROJECT_DOMAIN }}
+      BLOB_READ_WRITE_TOKEN: ${{ secrets.BLOB_READ_WRITE_TOKEN }}
+      VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+      VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Skip if no code change (for schedule)
+      - name: Mark start time
+        shell: bash
+        run: echo "JOB_STARTED_AT=$(date +%s)" >> "$GITHUB_ENV"
+
+      - name: No-op check (schedule only)
         if: ${{ github.event_name == 'schedule' }}
+        id: noop
+        shell: bash
         run: |
-          if ! git log --since="1 day ago" | grep .; then
-            echo "No commits in last 24h — skipping deploy."
-            exit 0
+          if git log --since="24 hours ago" --pretty=format:"- %h %s (%cr)" | grep -q .; then
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+            echo "Commits found in last 24h — proceed"
+          else
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            {
+              echo "### CI Skipped – No new commits in last 24h"
+              echo ""
+              echo "**Trigger:** schedule"
+              echo "**Branch:** ${GITHUB_REF_NAME}"
+              echo "**Time:** $(date -u +'%Y-%m-%d %H:%M:%S UTC')"
+            } >> "$GITHUB_STEP_SUMMARY"
+            echo "No new commits in last 24h — skipping CI + Deploy"
           fi
 
       - name: Setup Node
+        if: ${{ github.event_name != 'schedule' || steps.noop.outputs.skip != 'true' }}
         uses: actions/setup-node@v4
         with:
           node-version: '20'
+          cache: 'npm'
 
       - name: Install deps
+        if: ${{ github.event_name != 'schedule' || steps.noop.outputs.skip != 'true' }}
         run: npm ci
 
       - name: Build
+        if: ${{ github.event_name != 'schedule' || steps.noop.outputs.skip != 'true' }}
         run: npm run build
 
       - name: Deploy to Vercel (Production)
+        if: ${{ github.event_name != 'schedule' || steps.noop.outputs.skip != 'true' }}
+        shell: bash
         run: |
           npm i -g vercel@latest
-          vercel pull --yes --token=${{ secrets.VERCEL_TOKEN }} --environment=production
-          vercel build --prod --token=${{ secrets.VERCEL_TOKEN }}
-          vercel deploy --prebuilt --prod --token=${{ secrets.VERCEL_TOKEN }}
-        env:
-          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
-          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
-          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          vercel pull --yes --token="${{ env.VERCEL_TOKEN }}" --environment=production
+          vercel build --prod --token="${{ env.VERCEL_TOKEN }}"
+          vercel deploy --prebuilt --prod --token="${{ env.VERCEL_TOKEN }}" | tee deploy.log
+          DEPLOY_URL=$(grep -Eo 'https?://[^ ]+' deploy.log | tail -n1)
+          echo "DEPLOY_URL=${DEPLOY_URL}" >> "$GITHUB_ENV"
 
-      - name: (Optional) Trigger ETL on Production
-        if: ${{ env.BLOB_READ_WRITE_TOKEN != '' }}
+      - name: Trigger ETL on Production
+        if: ${{ (github.event_name != 'schedule' || steps.noop.outputs.skip != 'true') && env.BLOB_READ_WRITE_TOKEN != '' }}
         run: |
-          curl -X POST "https://${{ env.VERCEL_PROJECT_DOMAIN }}/api/etl" -H "x-cron-token: $BLOB_READ_WRITE_TOKEN"
+          curl -sS --fail \
+            -X POST "https://${{ env.VERCEL_PROJECT_DOMAIN }}/api/etl" \
+            -H "x-cron-token: ${BLOB_READ_WRITE_TOKEN}"
 
+      - name: Post-deploy Summary (success)
+        if: ${{ (github.event_name != 'schedule' || steps.noop.outputs.skip != 'true') && success() }}
+        shell: bash
+        run: |
+          SHA=$(git rev-parse --short HEAD)
+          MSG=$(git log -1 --pretty=%s)
+          AUTHOR=$(git log -1 --pretty=format:'%an')
+          END_TS=$(date +%s)
+          DURATION=$(( END_TS - JOB_STARTED_AT ))
+          RUN_URL="https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+          {
+            echo "### ✅ Deploy Succeeded"
+            echo ""
+            echo "- **Repo:** ${GITHUB_REPOSITORY}"
+            echo "- **Branch:** ${GITHUB_REF_NAME}"
+            echo "- **Commit:** ${SHA} — ${MSG} (by ${AUTHOR})"
+            echo "- **Environment:** production"
+            echo "- **URL:** ${DEPLOY_URL:-N/A}"
+            echo "- **Duration:** ${DURATION}s"
+            echo "- **Run:** ${RUN_URL}"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Post-run Summary (failure)
+        if: ${{ failure() }}
+        shell: bash
+        run: |
+          SHA=$(git rev-parse --short HEAD || echo "N/A")
+          MSG=$(git log -1 --pretty=%s || echo "N/A")
+          AUTHOR=$(git log -1 --pretty=format:'%an' || echo "N/A")
+          END_TS=$(date +%s)
+          DURATION=$(( END_TS - JOB_STARTED_AT ))
+          RUN_URL="https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+          {
+            echo "### ❌ Deploy Failed"
+            echo ""
+            echo "- **Repo:** ${GITHUB_REPOSITORY}"
+            echo "- **Branch:** ${GITHUB_REF_NAME}"
+            echo "- **Commit:** ${SHA} — ${MSG} (by ${AUTHOR})"
+            echo "- **Environment:** production"
+            echo "- **URL:** ${DEPLOY_URL:-N/A}"
+            echo "- **Duration:** ${DURATION}s"
+            echo "- **Run:** ${RUN_URL}"
+            echo ""
+            echo "_Check the failed step logs above for details._"
+          } >> "$GITHUB_STEP_SUMMARY"
