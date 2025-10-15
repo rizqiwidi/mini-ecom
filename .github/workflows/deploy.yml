@@ -47,7 +47,7 @@ jobs:
         if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.force == 'true' }}
         run: echo "FORCE=true" >> "$GITHUB_ENV"
 
-      - name: Gate (schedule: commits in last 24h)
+      - name: Gate (schedule commits in last 24h)
         id: gate_schedule
         if: ${{ github.event_name == 'schedule' }}
         shell: bash
@@ -108,6 +108,75 @@ jobs:
         run: |
           set -euo pipefail
           npm run build
+
+      - name: Deploy to Vercel (Production)
+        if: ${{ (github.event_name != 'schedule' || steps.gate_schedule.outputs.allow == 'true') && (steps.changes.outputs.changed == 'true' || env.FORCE == 'true') }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm i -g vercel@latest
+          vercel pull --yes --environment=production --token="${{ env.VERCEL_TOKEN }}"
+          vercel build --prod --token="${{ env.VERCEL_TOKEN }}"
+          DEPLOY_LINE="$(vercel deploy --prebuilt --prod --yes --token="${{ env.VERCEL_TOKEN }}" | tail -n1)"
+          case "$DEPLOY_LINE" in
+            https://*) echo "DEPLOY_URL=$DEPLOY_LINE" >> "$GITHUB_ENV" ;;
+            *) echo "Failed to capture deploy URL"; exit 1 ;;
+          esac
+
+      - name: Trigger ETL
+        if: ${{ (github.event_name != 'schedule' || steps.gate_schedule.outputs.allow == 'true') && (steps.changes.outputs.changed == 'true' || env.FORCE == 'true') && env.CRON_SECRET != '' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --retry 3 --retry-all-errors --fail \
+            -X POST "https://${{ env.VERCEL_PROJECT_DOMAIN }}/api/etl" \
+            -H "x-cron-secret: ${CRON_SECRET}"
+
+      - name: Post-deploy Summary (success)
+        if: ${{ (github.event_name != 'schedule' || steps.gate_schedule.outputs.allow == 'true') && (steps.changes.outputs.changed == 'true' || env.FORCE == 'true') && success() }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          SHA=$(git rev-parse --short HEAD)
+          MSG=$(git log -1 --pretty=%s)
+          AUTHOR=$(git log -1 --pretty=format:'%an')
+          END_TS=$(date +%s)
+          DURATION=$(( END_TS - JOB_STARTED_AT ))
+          RUN_URL="https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+          {
+            echo "### Deploy Succeeded"
+            echo "- Repo: ${GITHUB_REPOSITORY}"
+            echo "- Branch: ${GITHUB_REF_NAME}"
+            echo "- Commit: ${SHA} — ${MSG} (by ${AUTHOR})"
+            echo "- Environment: production"
+            echo "- URL: ${DEPLOY_URL:-N/A}"
+            echo "- Duration: ${DURATION}s"
+            echo "- Run: ${RUN_URL}"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Post-run Summary (failure)
+        if: ${{ failure() }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          SHA=$(git rev-parse --short HEAD || echo "N/A")
+          MSG=$(git log -1 --pretty=%s || echo "N/A")
+          AUTHOR=$(git log -1 --pretty=format:'%an' || echo "N/A")
+          END_TS=$(date +%s)
+          DURATION=$(( END_TS - JOB_STARTED_AT ))
+          RUN_URL="https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+          {
+            echo "### Deploy Failed"
+            echo "- Repo: ${GITHUB_REPOSITORY}"
+            echo "- Branch: ${GITHUB_REF_NAME}"
+            echo "- Commit: ${SHA} — ${MSG} (by ${AUTHOR})"
+            echo "- Environment: production"
+            echo "- URL: ${DEPLOY_URL:-N/A}"
+            echo "- Duration: ${DURATION}s"
+            echo "- Run: ${RUN_URL}"
+            echo ""
+            echo "Check the failed step logs above for details."
+          } >> "$GITHUB_STEP_SUMMARY"          npm run build
 
       - name: Deploy to Vercel (Production)
         if: ${{ (github.event_name != 'schedule' || steps.gate_schedule.outputs.allow == 'true') && (steps.changes.outputs.changed == 'true' || env.FORCE == 'true') }}
