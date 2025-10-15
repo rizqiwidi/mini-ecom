@@ -1,4 +1,4 @@
-name: CI + Deploy (Vercel + Blob)
+name: Vercel Production Pipeline — Auto-Skip & ETL Trigger
 
 on:
   push:
@@ -7,6 +7,11 @@ on:
       - "**.md"
       - ".github/**"
   workflow_dispatch:
+    inputs:
+      force:
+        description: "Force run even if no changes"
+        required: false
+        default: "false"
   schedule:
     - cron: "0 0 * * *"
 
@@ -20,11 +25,11 @@ permissions:
 jobs:
   build-deploy:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 40
     env:
       NEXT_PUBLIC_BASE_URL: ${{ secrets.NEXT_PUBLIC_BASE_URL }}
       VERCEL_PROJECT_DOMAIN: ${{ secrets.VERCEL_PROJECT_DOMAIN }}
-      BLOB_READ_WRITE_TOKEN: ${{ secrets.BLOB_READ_WRITE_TOKEN }}
+      CRON_SECRET: ${{ secrets.CRON_SECRET }}
       VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
       VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
       VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
@@ -32,68 +37,111 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
 
-      - name: Mark start time
-        shell: bash
-        run: echo "JOB_STARTED_AT=$(date +%s)" >> "$GITHUB_ENV"
-
-      - name: No-op check (schedule only)
+      - name: Gate (schedule: commits in last 24h)
+        id: gate_schedule
         if: ${{ github.event_name == 'schedule' }}
-        id: noop
         shell: bash
         run: |
-          if git log --since="24 hours ago" --pretty=format:"- %h %s (%cr)" | grep -q .; then
-            echo "skip=false" >> "$GITHUB_OUTPUT"
+          set -euo pipefail
+          if git log --since="24 hours ago" --pretty=format:%h | grep -q .; then
+            echo "allow=true" >> "$GITHUB_OUTPUT"
             echo "Commits found in last 24h — proceed"
           else
-            echo "skip=true" >> "$GITHUB_OUTPUT"
-            {
-              echo "### CI Skipped – No new commits in last 24h"
-              echo ""
-              echo "**Trigger:** schedule"
-              echo "**Branch:** ${GITHUB_REF_NAME}"
-              echo "**Time:** $(date -u +'%Y-%m-%d %H:%M:%S UTC')"
-            } >> "$GITHUB_STEP_SUMMARY"
-            echo "No new commits in last 24h — skipping CI + Deploy"
+            echo "allow=false" >> "$GITHUB_OUTPUT"
+            echo "### 💤 No new commits in last 24h — skipping" >> "$GITHUB_STEP_SUMMARY"
           fi
 
+      - name: Detect changes (files)
+        id: changes
+        if: ${{ github.event_name != 'schedule' || steps.gate_schedule.outputs.allow == 'true' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! git rev-parse --verify HEAD~1 >/dev/null 2>&1; then
+            BASE="--root"
+          else
+            BASE="HEAD~1"
+          fi
+          if git diff --quiet ${BASE} HEAD -- . ':!**.md' ':!.github/**'; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "### 💤 No file changes — skipping CI & Deploy" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+            echo "Changes found — proceed"
+          fi
+
+      - name: Mark start time
+        if: ${{ (github.event_name != 'schedule' || steps.gate_schedule.outputs.allow == 'true')
+              && (steps.changes.outputs.changed == 'true' || (github.event_name == 'workflow_dispatch' && inputs.force == 'true')) }}
+        run: echo "JOB_STARTED_AT=$(date +%s)" >> "$GITHUB_ENV"
+
       - name: Setup Node
-        if: ${{ github.event_name != 'schedule' || steps.noop.outputs.skip != 'true' }}
+        if: ${{ (github.event_name != 'schedule' || steps.gate_schedule.outputs.allow == 'true')
+              && (steps.changes.outputs.changed == 'true' || (github.event_name == 'workflow_dispatch' && inputs.force == 'true')) }}
         uses: actions/setup-node@v4
         with:
           node-version: '20'
           cache: 'npm'
 
+      - name: Cache Next build
+        if: ${{ (github.event_name != 'schedule' || steps.gate_schedule.outputs.allow == 'true')
+              && (steps.changes.outputs.changed == 'true' || (github.event_name == 'workflow_dispatch' && inputs.force == 'true')) }}
+        uses: actions/cache@v4
+        with:
+          path: .next/cache
+          key: next-${{ runner.os }}-${{ hashFiles('**/package-lock.json') }}-${{ hashFiles('**/*.ts','**/*.tsx','next.config.*') }}
+          restore-keys: |
+            next-${{ runner.os }}-${{ hashFiles('**/package-lock.json') }}-
+
       - name: Install deps
-        if: ${{ github.event_name != 'schedule' || steps.noop.outputs.skip != 'true' }}
+        if: ${{ (github.event_name != 'schedule' || steps.gate_schedule.outputs.allow == 'true')
+              && (steps.changes.outputs.changed == 'true' || (github.event_name == 'workflow_dispatch' && inputs.force == 'true')) }}
         run: npm ci
 
       - name: Build
-        if: ${{ github.event_name != 'schedule' || steps.noop.outputs.skip != 'true' }}
-        run: npm run build
+        if: ${{ (github.event_name != 'schedule' || steps.gate_schedule.outputs.allow == 'true')
+              && (steps.changes.outputs.changed == 'true' || (github.event_name == 'workflow_dispatch' && inputs.force == 'true')) }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm run build
 
       - name: Deploy to Vercel (Production)
-        if: ${{ github.event_name != 'schedule' || steps.noop.outputs.skip != 'true' }}
+        if: ${{ (github.event_name != 'schedule' || steps.gate_schedule.outputs.allow == 'true')
+              && (steps.changes.outputs.changed == 'true' || (github.event_name == 'workflow_dispatch' && inputs.force == 'true')) }}
         shell: bash
         run: |
+          set -euo pipefail
           npm i -g vercel@latest
-          vercel pull --yes --token="${{ env.VERCEL_TOKEN }}" --environment=production
+          vercel pull --yes --environment=production --token="${{ env.VERCEL_TOKEN }}"
           vercel build --prod --token="${{ env.VERCEL_TOKEN }}"
-          vercel deploy --prebuilt --prod --token="${{ env.VERCEL_TOKEN }}" | tee deploy.log
-          DEPLOY_URL=$(grep -Eo 'https?://[^ ]+' deploy.log | tail -n1)
-          echo "DEPLOY_URL=${DEPLOY_URL}" >> "$GITHUB_ENV"
+          DEPLOY_LINE="$(vercel deploy --prebuilt --prod --yes --token="${{ env.VERCEL_TOKEN }}" | tail -n1)"
+          case "$DEPLOY_LINE" in
+            https://*) echo "DEPLOY_URL=$DEPLOY_LINE" >> "$GITHUB_ENV" ;;
+            *) echo "Failed to capture deploy URL"; exit 1 ;;
+          esac
 
-      - name: Trigger ETL on Production
-        if: ${{ (github.event_name != 'schedule' || steps.noop.outputs.skip != 'true') && env.BLOB_READ_WRITE_TOKEN != '' }}
+      - name: Trigger ETL
+        if: ${{ (github.event_name != 'schedule' || steps.gate_schedule.outputs.allow == 'true')
+              && (steps.changes.outputs.changed == 'true' || (github.event_name == 'workflow_dispatch' && inputs.force == 'true'))
+              && env.CRON_SECRET != '' }}
+        shell: bash
         run: |
-          curl -sS --fail \
+          set -euo pipefail
+          curl --retry 3 --retry-all-errors --fail \
             -X POST "https://${{ env.VERCEL_PROJECT_DOMAIN }}/api/etl" \
-            -H "x-cron-token: ${BLOB_READ_WRITE_TOKEN}"
+            -H "x-cron-secret: ${CRON_SECRET}"
 
       - name: Post-deploy Summary (success)
-        if: ${{ (github.event_name != 'schedule' || steps.noop.outputs.skip != 'true') && success() }}
+        if: ${{ (github.event_name != 'schedule' || steps.gate_schedule.outputs.allow == 'true')
+              && (steps.changes.outputs.changed == 'true' || (github.event_name == 'workflow_dispatch' && inputs.force == 'true'))
+              && success() }}
         shell: bash
         run: |
+          set -euo pipefail
           SHA=$(git rev-parse --short HEAD)
           MSG=$(git log -1 --pretty=%s)
           AUTHOR=$(git log -1 --pretty=format:'%an')
@@ -116,6 +164,7 @@ jobs:
         if: ${{ failure() }}
         shell: bash
         run: |
+          set -euo pipefail
           SHA=$(git rev-parse --short HEAD || echo "N/A")
           MSG=$(git log -1 --pretty=%s || echo "N/A")
           AUTHOR=$(git log -1 --pretty=format:'%an' || echo "N/A")
