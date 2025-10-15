@@ -8,6 +8,8 @@
 
 <a href="https://www.kaggle.com/datasets/artakusuma/laptopecomerce/" target="_blank"> <img src="https://img.shields.io/badge/Kaggle-Laptop%20E--Commerce%20Dataset-orange?style=for-the-badge&logo=kaggle" alt="Kaggle Dataset"/> </a>
 
+[![Vercel Production Pipeline](https://github.com/rizqiwidi/mini-ecom/actions/workflows/deploy.yml/badge.svg?branch=main)](https://github.com/rizqiwidi/mini-ecom/actions/workflows/deploy.yml)
+
 ## Highlights
 - Smart search with token heuristics so SKU, product name, and brand remain easy to discover.
 - Trend and prediction visuals: up/down/stable badges plus latest price change percentage and 7-day forecast.
