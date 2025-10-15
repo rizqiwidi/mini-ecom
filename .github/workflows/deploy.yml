@@ -40,6 +40,13 @@ jobs:
         with:
           fetch-depth: 2
 
+      - name: Default FORCE=false
+        run: echo "FORCE=false" >> "$GITHUB_ENV"
+
+      - name: Resolve FORCE (dispatch)
+        if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.force == 'true' }}
+        run: echo "FORCE=true" >> "$GITHUB_ENV"
+
       - name: Gate (schedule: commits in last 24h)
         id: gate_schedule
         if: ${{ github.event_name == 'schedule' }}
@@ -48,7 +55,6 @@ jobs:
           set -euo pipefail
           if git log --since="24 hours ago" --pretty=format:%h | grep -q .; then
             echo "allow=true" >> "$GITHUB_OUTPUT"
-            echo "Commits found in last 24h — proceed"
           else
             echo "allow=false" >> "$GITHUB_OUTPUT"
             echo "### 💤 No new commits in last 24h — skipping" >> "$GITHUB_STEP_SUMMARY"
@@ -70,25 +76,21 @@ jobs:
             echo "### 💤 No file changes — skipping CI & Deploy" >> "$GITHUB_STEP_SUMMARY"
           else
             echo "changed=true" >> "$GITHUB_OUTPUT"
-            echo "Changes found — proceed"
           fi
 
       - name: Mark start time
-        if: ${{ (github.event_name != 'schedule' || steps.gate_schedule.outputs.allow == 'true')
-              && (steps.changes.outputs.changed == 'true' || (github.event_name == 'workflow_dispatch' && inputs.force == 'true')) }}
+        if: ${{ (github.event_name != 'schedule' || steps.gate_schedule.outputs.allow == 'true') && (steps.changes.outputs.changed == 'true' || env.FORCE == 'true') }}
         run: echo "JOB_STARTED_AT=$(date +%s)" >> "$GITHUB_ENV"
 
       - name: Setup Node
-        if: ${{ (github.event_name != 'schedule' || steps.gate_schedule.outputs.allow == 'true')
-              && (steps.changes.outputs.changed == 'true' || (github.event_name == 'workflow_dispatch' && inputs.force == 'true')) }}
+        if: ${{ (github.event_name != 'schedule' || steps.gate_schedule.outputs.allow == 'true') && (steps.changes.outputs.changed == 'true' || env.FORCE == 'true') }}
         uses: actions/setup-node@v4
         with:
           node-version: '20'
           cache: 'npm'
 
       - name: Cache Next build
-        if: ${{ (github.event_name != 'schedule' || steps.gate_schedule.outputs.allow == 'true')
-              && (steps.changes.outputs.changed == 'true' || (github.event_name == 'workflow_dispatch' && inputs.force == 'true')) }}
+        if: ${{ (github.event_name != 'schedule' || steps.gate_schedule.outputs.allow == 'true') && (steps.changes.outputs.changed == 'true' || env.FORCE == 'true') }}
         uses: actions/cache@v4
         with:
           path: .next/cache
@@ -97,21 +99,18 @@ jobs:
             next-${{ runner.os }}-${{ hashFiles('**/package-lock.json') }}-
 
       - name: Install deps
-        if: ${{ (github.event_name != 'schedule' || steps.gate_schedule.outputs.allow == 'true')
-              && (steps.changes.outputs.changed == 'true' || (github.event_name == 'workflow_dispatch' && inputs.force == 'true')) }}
+        if: ${{ (github.event_name != 'schedule' || steps.gate_schedule.outputs.allow == 'true') && (steps.changes.outputs.changed == 'true' || env.FORCE == 'true') }}
         run: npm ci
 
       - name: Build
-        if: ${{ (github.event_name != 'schedule' || steps.gate_schedule.outputs.allow == 'true')
-              && (steps.changes.outputs.changed == 'true' || (github.event_name == 'workflow_dispatch' && inputs.force == 'true')) }}
+        if: ${{ (github.event_name != 'schedule' || steps.gate_schedule.outputs.allow == 'true') && (steps.changes.outputs.changed == 'true' || env.FORCE == 'true') }}
         shell: bash
         run: |
           set -euo pipefail
           npm run build
 
       - name: Deploy to Vercel (Production)
-        if: ${{ (github.event_name != 'schedule' || steps.gate_schedule.outputs.allow == 'true')
-              && (steps.changes.outputs.changed == 'true' || (github.event_name == 'workflow_dispatch' && inputs.force == 'true')) }}
+        if: ${{ (github.event_name != 'schedule' || steps.gate_schedule.outputs.allow == 'true') && (steps.changes.outputs.changed == 'true' || env.FORCE == 'true') }}
         shell: bash
         run: |
           set -euo pipefail
@@ -125,9 +124,7 @@ jobs:
           esac
 
       - name: Trigger ETL
-        if: ${{ (github.event_name != 'schedule' || steps.gate_schedule.outputs.allow == 'true')
-              && (steps.changes.outputs.changed == 'true' || (github.event_name == 'workflow_dispatch' && inputs.force == 'true'))
-              && env.CRON_SECRET != '' }}
+        if: ${{ (github.event_name != 'schedule' || steps.gate_schedule.outputs.allow == 'true') && (steps.changes.outputs.changed == 'true' || env.FORCE == 'true') && env.CRON_SECRET != '' }}
         shell: bash
         run: |
           set -euo pipefail
@@ -136,9 +133,7 @@ jobs:
             -H "x-cron-secret: ${CRON_SECRET}"
 
       - name: Post-deploy Summary (success)
-        if: ${{ (github.event_name != 'schedule' || steps.gate_schedule.outputs.allow == 'true')
-              && (steps.changes.outputs.changed == 'true' || (github.event_name == 'workflow_dispatch' && inputs.force == 'true'))
-              && success() }}
+        if: ${{ (github.event_name != 'schedule' || steps.gate_schedule.outputs.allow == 'true') && (steps.changes.outputs.changed == 'true' || env.FORCE == 'true') && success() }}
         shell: bash
         run: |
           set -euo pipefail
